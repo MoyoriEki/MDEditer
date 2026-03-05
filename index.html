@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="ja" data-theme="dark">
 <head>
 <meta charset="UTF-8">
@@ -15,137 +14,135 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;1,300&family=IBM+Plex+Sans:wght@300;400&family=Spectral:ital,wght@0,300;0,400;1,300&family=Noto+Serif+JP:wght@300;400&display=swap');
 
-[data-theme=“dark”]{
-–bg:#0e0e0e;–bg2:#141414;–bg3:#1c1c1c;–bg4:#222;
-–border:#252525;–border2:#333;
-–text:#ccc9c2;–text-dim:#4a4641;–text-mid:#7a7470;
-–accent:#c8a96e;–accent-dim:#5a4a2a;–danger:#c05050;
+[data-theme="dark"]{
+  --bg:#0e0e0e;--bg2:#141414;--bg3:#1c1c1c;--bg4:#222;
+  --border:#252525;--border2:#333;
+  --text:#ccc9c2;--text-dim:#4a4641;--text-mid:#7a7470;
+  --accent:#c8a96e;--accent-dim:#5a4a2a;--danger:#c05050;
 }
-[data-theme=“light”]{
-–bg:#faf8f4;–bg2:#f0ede6;–bg3:#e8e4db;–bg4:#ddd9cf;
-–border:#dedad2;–border2:#c8c3b8;
-–text:#201e1a;–text-dim:#a8a299;–text-mid:#6a6460;
-–accent:#7a5a22;–accent-dim:#c8a050;–danger:#b03030;
+[data-theme="light"]{
+  --bg:#faf8f4;--bg2:#f0ede6;--bg3:#e8e4db;--bg4:#ddd9cf;
+  --border:#dedad2;--border2:#c8c3b8;
+  --text:#201e1a;--text-dim:#a8a299;--text-mid:#6a6460;
+  --accent:#7a5a22;--accent-dim:#c8a050;--danger:#b03030;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
-body{background:var(–bg);color:var(–text);font-family:‘IBM Plex Mono’,monospace;display:flex;flex-direction:column;transition:background .2s,color .2s}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;transition:background .2s,color .2s}
 #app{display:flex;flex:1;overflow:hidden}
 
 /* ── SIDEBAR ── */
-#sidebar{width:250px;flex-shrink:0;background:var(–bg2);border-right:1px solid var(–border);display:flex;flex-direction:column;overflow:hidden;transition:width .2s,opacity .2s}
+#sidebar{width:250px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .2s,opacity .2s}
 #sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
-#sidebar-top{padding:12px 14px 10px;border-bottom:1px solid var(–border);display:flex;align-items:center;gap:6px}
-#sidebar-top-label{font-size:9px;letter-spacing:.22em;color:var(–text-dim);text-transform:uppercase;flex:1}
-.icon-btn{background:none;border:none;cursor:pointer;color:var(–text-dim);font-size:15px;padding:4px 6px;border-radius:2px;transition:color .15s,background .15s;line-height:1;font-family:‘IBM Plex Mono’,monospace}
-.icon-btn:hover{color:var(–accent);background:var(–bg3)}
+#sidebar-top{padding:12px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+#sidebar-top-label{font-size:9px;letter-spacing:.22em;color:var(--text-dim);text-transform:uppercase;flex:1}
+.icon-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:15px;padding:4px 6px;border-radius:2px;transition:color .15s,background .15s;line-height:1;font-family:'IBM Plex Mono',monospace}
+.icon-btn:hover{color:var(--accent);background:var(--bg3)}
 .icon-btn:active{opacity:.7}
 
 #file-tree{flex:1;overflow-y:auto;padding:4px 0}
-.tree-msg{padding:14px 16px;font-size:11px;color:var(–text-dim);line-height:1.6}
+.tree-msg{padding:14px 16px;font-size:11px;color:var(--text-dim);line-height:1.6}
 
-.tree-row{display:flex;align-items:center;gap:5px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(–text-mid);transition:color .1s,background .1s;white-space:nowrap;overflow:hidden;user-select:none;border-left:2px solid transparent}
-.tree-row:hover{color:var(–text);background:var(–bg3)}
-.tree-file.active{color:var(–accent);border-left-color:var(–accent)}
-.tree-arrow{font-size:8px;flex-shrink:0;transition:transform .15s;color:var(–text-dim);width:10px;display:inline-block}
+.tree-row{display:flex;align-items:center;gap:5px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text-mid);transition:color .1s,background .1s;white-space:nowrap;overflow:hidden;user-select:none;border-left:2px solid transparent}
+.tree-row:hover{color:var(--text);background:var(--bg3)}
+.tree-file.active{color:var(--accent);border-left-color:var(--accent)}
+.tree-arrow{font-size:8px;flex-shrink:0;transition:transform .15s;color:var(--text-dim);width:10px;display:inline-block}
 .tree-arrow.open{transform:rotate(90deg)}
-.tree-icon{font-size:10px;flex-shrink:0;color:var(–text-dim)}
+.tree-icon{font-size:10px;flex-shrink:0;color:var(--text-dim)}
 .tree-name{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
 .tree-actions{display:none;gap:2px;flex-shrink:0}
 .tree-row:hover .tree-actions{display:flex}
-.tree-act-btn{background:none;border:none;cursor:pointer;color:var(–text-dim);font-size:12px;padding:1px 3px;border-radius:2px;transition:color .1s;line-height:1;font-family:inherit}
-.tree-act-btn:hover{color:var(–danger)}
+.tree-act-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:12px;padding:1px 3px;border-radius:2px;transition:color .1s;line-height:1;font-family:inherit}
+.tree-act-btn:hover{color:var(--danger)}
 .tree-children{display:none}
 .tree-children.open{display:block}
 
-#sidebar-bottom{border-top:1px solid var(–border);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
-#dbx-status{font-size:10px;letter-spacing:.08em;color:var(–text-dim)}
-#dbx-status.on{color:var(–accent)}
-#dbx-connect-btn{width:100%;background:none;border:1px solid var(–border2);color:var(–text-mid);cursor:pointer;font-family:‘IBM Plex Mono’,monospace;font-size:11px;letter-spacing:.1em;padding:8px;border-radius:2px;text-transform:uppercase;transition:all .15s}
-#dbx-connect-btn:hover{border-color:var(–accent);color:var(–accent)}
-#dbx-connect-btn.on{border-color:var(–accent-dim);color:var(–accent)}
+#sidebar-bottom{border-top:1px solid var(--border);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+#dbx-status{font-size:10px;letter-spacing:.08em;color:var(--text-dim)}
+#dbx-status.on{color:var(--accent)}
+#dbx-connect-btn{width:100%;background:none;border:1px solid var(--border2);color:var(--text-mid);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;padding:8px;border-radius:2px;text-transform:uppercase;transition:all .15s}
+#dbx-connect-btn:hover{border-color:var(--accent);color:var(--accent)}
+#dbx-connect-btn.on{border-color:var(--accent-dim);color:var(--accent)}
 
 /* ── MAIN ── */
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
-#toolbar{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(–border);background:var(–bg);flex-shrink:0;flex-wrap:wrap}
-#toggle-sidebar{background:none;border:none;cursor:pointer;color:var(–text-mid);font-size:18px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1}
-#toggle-sidebar:hover{color:var(–accent)}
-#filename-display{flex:1;font-size:13px;color:var(–text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px}
-#filename-display b{color:var(–text);font-weight:400}
-#unsaved-dot{width:6px;height:6px;border-radius:50%;background:var(–accent);display:none;flex-shrink:0}
+#toolbar{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;flex-wrap:wrap}
+#toggle-sidebar{background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:18px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1}
+#toggle-sidebar:hover{color:var(--accent)}
+#filename-display{flex:1;font-size:13px;color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px}
+#filename-display b{color:var(--text);font-weight:400}
+#unsaved-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:none;flex-shrink:0}
 #unsaved-dot.v{display:block}
 
 .tbtn{
-background:none;border:1px solid var(–border2);color:var(–text-mid);
-cursor:pointer;font-family:‘IBM Plex Mono’,monospace;font-size:11px;
-letter-spacing:.1em;padding:7px 14px;border-radius:2px;
-transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
+  background:none;border:1px solid var(--border2);color:var(--text-mid);
+  cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;
+  letter-spacing:.1em;padding:7px 14px;border-radius:2px;
+  transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 }
-.tbtn:hover{border-color:var(–accent);color:var(–accent)}
+.tbtn:hover{border-color:var(--accent);color:var(--accent)}
 .tbtn:active{transform:scale(.96);opacity:.8}
-.tbtn.on{border-color:var(–accent);color:var(–accent);background:rgba(200,169,110,.07)}
+.tbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(200,169,110,.07)}
 .tbtn.flash{border-color:#5a9e6f;color:#5a9e6f;background:rgba(90,158,111,.1)}
 
 /* ── EDITOR ── */
 #editor-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column}
 #cm-host{flex:1;overflow:hidden;display:flex;flex-direction:column}
-#cm-host .cm-editor{flex:1;height:100% !important;background:var(–bg) !important;outline:none}
+#cm-host .cm-editor{flex:1;height:100% !important;background:var(--bg) !important;outline:none}
 #cm-host .cm-scroller{line-height:1.8;padding:32px 64px;overflow:auto}
 @media(max-width:768px){#cm-host .cm-scroller{padding:16px 18px !important}#preview{padding:20px 18px !important}}
-#cm-host .cm-content{caret-color:var(–accent)}
-#cm-host .cm-cursor{border-left:2px solid var(–accent) !important}
+#cm-host .cm-content{caret-color:var(--accent)}
+#cm-host .cm-cursor{border-left:2px solid var(--accent) !important}
 #cm-host .cm-selectionBackground{background:rgba(200,169,110,.13) !important}
 #cm-host .cm-focused .cm-selectionBackground{background:rgba(200,169,110,.18) !important}
 #cm-host .cm-gutters{display:none !important}
 #cm-host .cm-activeLine{background:rgba(200,169,110,.022) !important}
 
-#preview{display:none;flex:1;overflow-y:auto;padding:40px 64px;line-height:1.9;color:var(–text);background:var(–bg)}
+#preview{display:none;flex:1;overflow-y:auto;padding:40px 64px;line-height:1.9;color:var(--text);background:var(--bg)}
 #preview.v{display:block}
-#preview h1,#preview h2,#preview h3{font-family:‘IBM Plex Mono’,monospace;font-weight:300;color:var(–accent);margin:2em 0 .6em}
+#preview h1,#preview h2,#preview h3{font-family:'IBM Plex Mono',monospace;font-weight:300;color:var(--accent);margin:2em 0 .6em}
 #preview h1{font-size:1.55em}#preview h2{font-size:1.2em}#preview h3{font-size:1.05em}
 #preview p{margin:0 0 1em}
-#preview code{font-family:‘IBM Plex Mono’,monospace;font-size:.88em;background:var(–bg3);padding:1px 6px;border-radius:2px;color:#9ec49a}
-#preview pre{background:var(–bg3);padding:18px 22px;border-radius:3px;overflow-x:auto;margin:0 0 1em;border-left:2px solid var(–accent-dim)}
+#preview code{font-family:'IBM Plex Mono',monospace;font-size:.88em;background:var(--bg3);padding:1px 6px;border-radius:2px;color:#9ec49a}
+#preview pre{background:var(--bg3);padding:18px 22px;border-radius:3px;overflow-x:auto;margin:0 0 1em;border-left:2px solid var(--accent-dim)}
 #preview pre code{background:none;padding:0}
-#preview blockquote{border-left:2px solid var(–accent-dim);margin:0 0 1em;padding:4px 0 4px 22px;color:var(–text-mid);font-style:italic}
+#preview blockquote{border-left:2px solid var(--accent-dim);margin:0 0 1em;padding:4px 0 4px 22px;color:var(--text-mid);font-style:italic}
 #preview ul,#preview ol{margin:0 0 1em;padding-left:1.6em}
 #preview li{margin:.3em 0}
-#preview a{color:var(–accent);text-decoration:none;border-bottom:1px solid var(–accent-dim)}
-#preview hr{border:none;border-top:1px solid var(–border2);margin:2em 0}
-#preview table{border-collapse:collapse;width:100%;margin:0 0 1em;font-size:.9em;font-family:‘IBM Plex Mono’,monospace}
-#preview th,#preview td{border:1px solid var(–border2);padding:6px 12px}
-#preview th{color:var(–accent);background:var(–bg2)}
+#preview a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-dim)}
+#preview hr{border:none;border-top:1px solid var(--border2);margin:2em 0}
+#preview table{border-collapse:collapse;width:100%;margin:0 0 1em;font-size:.9em;font-family:'IBM Plex Mono',monospace}
+#preview th,#preview td{border:1px solid var(--border2);padding:6px 12px}
+#preview th{color:var(--accent);background:var(--bg2)}
 
-#empty-state{flex:1;display:flex;align-items:center;justify-content:center;color:var(–text-dim);font-size:11px;letter-spacing:.12em}
+#empty-state{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:11px;letter-spacing:.12em}
 #empty-state.hidden{display:none}
 
-#statusbar{border-top:1px solid var(–border);padding:5px 20px;display:flex;gap:20px;font-size:10px;color:var(–text-dim);letter-spacing:.08em;background:var(–bg2);flex-shrink:0}
+#statusbar{border-top:1px solid var(--border);padding:5px 20px;display:flex;gap:20px;font-size:10px;color:var(--text-dim);letter-spacing:.08em;background:var(--bg2);flex-shrink:0}
 
 /* ── MODALS ── */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;align-items:center;justify-content:center}
 .modal-overlay.v{display:flex}
-.modal-box{background:var(–bg2);border:1px solid var(–border2);padding:28px;width:440px;border-radius:3px;max-height:90vh;overflow-y:auto}
-.modal-box h3{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(–accent);margin-bottom:16px;font-weight:400}
-.modal-box p{font-size:11px;color:var(–text-mid);line-height:1.8;margin-bottom:14px}
-.modal-box label{display:block;font-size:10px;letter-spacing:.1em;color:var(–text-dim);text-transform:uppercase;margin-bottom:5px;margin-top:12px}
+.modal-box{background:var(--bg2);border:1px solid var(--border2);padding:28px;width:440px;border-radius:3px;max-height:90vh;overflow-y:auto}
+.modal-box h3{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:16px;font-weight:400}
+.modal-box p{font-size:11px;color:var(--text-mid);line-height:1.8;margin-bottom:14px}
+.modal-box label{display:block;font-size:10px;letter-spacing:.1em;color:var(--text-dim);text-transform:uppercase;margin-bottom:5px;margin-top:12px}
 .modal-box label:first-of-type{margin-top:0}
-.modal-box input,.modal-box select{width:100%;background:var(–bg);border:1px solid var(–border2);color:var(–text);font-family:‘IBM Plex Mono’,monospace;font-size:16px;padding:9px 10px;outline:none;border-radius:2px;transition:border-color .15s}
-.modal-box input:focus,.modal-box select:focus{border-color:var(–accent)}
-.modal-box select option{background:var(–bg2)}
+.modal-box input,.modal-box select{width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:16px;padding:9px 10px;outline:none;border-radius:2px;transition:border-color .15s}
+.modal-box input:focus,.modal-box select:focus{border-color:var(--accent)}
+.modal-box select option{background:var(--bg2)}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
-.modal-actions button{background:none;border:1px solid var(–border2);color:var(–text-mid);cursor:pointer;font-family:‘IBM Plex Mono’,monospace;font-size:11px;letter-spacing:.1em;padding:8px 18px;border-radius:2px;text-transform:uppercase;transition:all .15s}
-.modal-actions button:hover{border-color:var(–accent);color:var(–accent)}
-.modal-actions button.primary{border-color:var(–accent);color:var(–accent)}
+.modal-actions button{background:none;border:1px solid var(--border2);color:var(--text-mid);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;padding:8px 18px;border-radius:2px;text-transform:uppercase;transition:all .15s}
+.modal-actions button:hover{border-color:var(--accent);color:var(--accent)}
+.modal-actions button.primary{border-color:var(--accent);color:var(--accent)}
 
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(–border2);border-radius:2px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 </style>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/eruda/3.0.1/eruda.min.js"></script><script>eruda.init();</script>
-
 </head>
 <body>
 <div id="app">
@@ -165,7 +162,6 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
   </div>
 
   <!-- MAIN -->
-
   <div id="main">
     <div id="toolbar">
       <button id="toggle-sidebar">☰</button>
@@ -192,7 +188,6 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 </div>
 
 <!-- Dropbox設定モーダル -->
-
 <div class="modal-overlay" id="dbx-modal">
   <div class="modal-box">
     <h3>Dropbox 設定</h3>
@@ -213,7 +208,6 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 </div>
 
 <!-- 設定モーダル -->
-
 <div class="modal-overlay" id="settings-modal">
   <div class="modal-box">
     <h3>設定</h3>
@@ -262,7 +256,6 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 </div>
 
 <!-- 新規ファイルモーダル -->
-
 <div class="modal-overlay" id="newfile-modal">
   <div class="modal-box" style="width:360px">
     <h3>新規ファイル</h3>
@@ -276,7 +269,6 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 </div>
 
 <!-- 新規フォルダモーダル -->
-
 <div class="modal-overlay" id="newfolder-modal">
   <div class="modal-box" style="width:360px">
     <h3>新規フォルダ</h3>
@@ -303,7 +295,7 @@ let appKey   = localStorage.getItem('mdapp_dbx_key') || '';
 let dbxPath  = localStorage.getItem('mdapp_dbx_path') || '';
 let currentPath = null;
 let currentFolder = ''; // 今開いてるフォルダ
-let isPreview = false, unsaved = false, isDark = (cfg.theme !== 'light');
+let isPreview = false, unsaved = false, isDark = true;
 
 // cfg
 let cfg = JSON.parse(localStorage.getItem('mdapp_cfg') || '{}');
@@ -397,357 +389,4 @@ function setValue(text){
 function applyTheme(dark){
   isDark=dark;
   document.documentElement.dataset.theme=dark?'dark':'light';
-  if(view&&currentPath){const d=getValue();buildEditor(d);}
-}
-
-// ── sidebar ──
-let sidebarOpen=window.innerWidth>768;
-if(!sidebarOpen) sidebar.classList.add('collapsed');
-document.getElementById('toggle-sidebar').addEventListener('click',()=>{
-  sidebarOpen=!sidebarOpen;
-  sidebar.classList.toggle('collapsed',!sidebarOpen);
-});
-
-// ── helpers ──
-function setUnsaved(v){unsaved=v;udot.classList.toggle('v',v);}
-function updateStatus(){
-  if(!view)return;
-  stC.textContent=getValue().length+' 文字';
-  stL.textContent=view.state.doc.lines+' 行';
-}
-function flashBtn(btn){
-  btn.classList.add('flash');
-  setTimeout(()=>btn.classList.remove('flash'),400);
-}
-
-// ── Dropbox API ──
-function dbxArg(obj){
-  return JSON.stringify(obj).replace(/[\u0080-\uFFFF]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
-}
-async function dbxFetch(endpoint,body){
-  const r=await fetch('https://api.dropboxapi.com/2/'+endpoint,{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/json'},
-    body:JSON.stringify(body),
-  });
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-async function dbxDownload(path){
-  const r=await fetch('https://content.dropboxapi.com/2/files/download',{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+dbxToken,'Dropbox-API-Arg':dbxArg({path})},
-  });
-  if(!r.ok) throw new Error(await r.text());
-  return r.text();
-}
-async function dbxUpload(path,content){
-  const r=await fetch('https://content.dropboxapi.com/2/files/upload',{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/octet-stream','Dropbox-API-Arg':dbxArg({path,mode:'overwrite',autorename:false})},
-    body:content,
-  });
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-async function dbxCreateFolder(path){
-  return dbxFetch('files/create_folder_v2',{path,autorename:false});
-}
-async function dbxDelete(path){
-  return dbxFetch('files/delete_v2',{path});
-}
-
-// ── tree ──
-async function loadTree(containerEl, folderPath){
-  containerEl.innerHTML='<div class="tree-msg">読み込み中...</div>';
-  try{
-    let entries=[], cursor=null, hasMore=true;
-    while(hasMore){
-      let d;
-      if(!cursor) d=await dbxFetch('files/list_folder',{path:folderPath,recursive:false,include_non_downloadable_files:false});
-      else d=await dbxFetch('files/list_folder/continue',{cursor});
-      entries=[...entries,...d.entries];
-      cursor=d.cursor; hasMore=d.has_more;
-    }
-    renderEntries(containerEl, entries, folderPath);
-  }catch(e){
-    containerEl.innerHTML='<div class="tree-msg" style="color:var(--danger)">エラー: '+e.message+'</div>';
-  }
-}
-
-function renderEntries(containerEl, entries, parentPath){
-  containerEl.innerHTML='';
-  const folders=entries.filter(e=>e['.tag']==='folder').sort((a,b)=>a.name.localeCompare(b.name,'ja'));
-  const files=entries.filter(e=>e['.tag']==='file'&&(e.name.endsWith('.md')||e.name.endsWith('.txt'))).sort((a,b)=>a.name.localeCompare(b.name,'ja'));
-
-  if(folders.length===0&&files.length===0){
-    containerEl.innerHTML='<div class="tree-msg">ファイルなし</div>';
-    return;
-  }
-
-  for(const folder of folders){
-    const row=document.createElement('div');
-    row.className='tree-row tree-folder';
-    const arrow=document.createElement('span'); arrow.className='tree-arrow'; arrow.textContent='▶';
-    const icon=document.createElement('span'); icon.className='tree-icon'; icon.textContent='▫';
-    const label=document.createElement('span'); label.className='tree-name'; label.textContent=folder.name;
-    const actions=document.createElement('span'); actions.className='tree-actions';
-    const delBtn=document.createElement('button'); delBtn.className='tree-act-btn'; delBtn.textContent='×'; delBtn.title='削除';
-    delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+folder.name+'" を削除しますか？（中身ごと削除されます）')){try{await dbxDelete(folder.path_display);row.remove();children.remove();}catch(e){alert('エラー: '+e.message);}}};
-    actions.append(delBtn);
-    row.append(arrow,icon,label,actions);
-
-    const children=document.createElement('div');
-    children.className='tree-children';
-    let loaded=false;
-
-    row.addEventListener('click',async()=>{
-      currentFolder=folder.path_display;
-      const open=children.classList.toggle('open');
-      arrow.classList.toggle('open',open);
-      if(open&&!loaded){loaded=true;await loadTree(children,folder.path_display);}
-    });
-    containerEl.append(row,children);
-  }
-
-  for(const file of files){
-    const row=document.createElement('div');
-    row.className='tree-row tree-file';
-    const icon=document.createElement('span'); icon.className='tree-icon'; icon.textContent='·';
-    const label=document.createElement('span'); label.className='tree-name'; label.textContent=file.name;
-    const actions=document.createElement('span'); actions.className='tree-actions';
-    const delBtn=document.createElement('button'); delBtn.className='tree-act-btn'; delBtn.textContent='×'; delBtn.title='削除';
-    delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+file.name+'" を削除しますか？')){try{await dbxDelete(file.path_display);if(currentPath===file.path_display){currentPath=null;fnDisplay.innerHTML='<b>—</b>';cmHost.style.display='none';emptyState.classList.remove('hidden');}row.remove();}catch(e){alert('エラー: '+e.message);}}};
-    actions.append(delBtn);
-    row.append(icon,label,actions);
-    row.addEventListener('click',()=>openFile(file.path_display,file.name,row));
-    containerEl.append(row);
-  }
-}
-
-// ── file ops ──
-let activeRow=null;
-async function openFile(path,name,row){
-  if(unsaved&&!confirm('保存されていない変更があります。続けますか？'))return;
-  try{
-    const text=await dbxDownload(path);
-    currentPath=path;
-    fnDisplay.innerHTML='<b>'+name+'</b>';
-    emptyState.classList.add('hidden');
-    cmHost.style.display='';
-    if(!view) buildEditor(text); else setValue(text);
-    setUnsaved(false); updateStatus(); stM.textContent='編集';
-    if(activeRow) activeRow.classList.remove('active');
-    activeRow=row; row.classList.add('active');
-    if(!isPreview) view.focus();
-    if(isPreview) renderPreview();
-  }catch(e){alert('読み込みエラー: '+e.message);}
-}
-
-async function saveOverwrite(){
-  if(!currentPath||!view)return;
-  try{
-    await dbxUpload(currentPath,getValue());
-    setUnsaved(false);
-    flashBtn(overwriteBtn);
-  }catch(e){alert('保存エラー: '+e.message);}
-}
-
-function exportFile(){
-  if(!view)return;
-  const name=currentPath?currentPath.split('/').pop():'export.md';
-  const blob=new Blob([getValue()],{type:'text/markdown'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=name;
-  a.click();
-  flashBtn(exportBtn);
-}
-
-// 新規ファイル作成
-async function createNewFile(name){
-  if(!dbxToken)return;
-  if(!name.endsWith('.md')&&!name.endsWith('.txt')) name+='.md';
-  const folder=currentFolder||dbxPath||'';
-  const path=(folder?folder:'')+(folder.endsWith('/')?'':'/') +name;
-  try{
-    await dbxUpload(path,'');
-    await loadTree(fileTree,dbxPath||'');
-  }catch(e){alert('作成エラー: '+e.message);}
-}
-
-// 新規フォルダ作成
-async function createNewFolder(name){
-  if(!dbxToken)return;
-  const folder=currentFolder||dbxPath||'';
-  const path=(folder?folder:'')+(folder.endsWith('/')?'':'/')+name;
-  try{
-    await dbxCreateFolder(path);
-    await loadTree(fileTree,dbxPath||'');
-  }catch(e){alert('作成エラー: '+e.message);}
-}
-
-// ── preview ──
-marked.setOptions({breaks:true,gfm:true});
-function renderPreview(){previewEl.innerHTML=marked.parse(getValue());}
-modeBtn.addEventListener('click',()=>{
-  if(!currentPath)return;
-  isPreview=!isPreview;
-  if(isPreview){
-    renderPreview(); previewEl.classList.add('v');
-    cmHost.style.display='none';
-    modeBtn.textContent='編集'; stM.textContent='プレビュー';
-  }else{
-    previewEl.classList.remove('v'); cmHost.style.display='';
-    modeBtn.textContent='プレビュー'; stM.textContent='編集'; view.focus();
-  }
-  modeBtn.classList.toggle('on',!isPreview);
-});
-
-// ── PKCE ──
-function b64url(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
-async function genPKCE(){
-  const v=b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));
-  return{verifier:v,challenge:b64url(d)};
-}
-async function checkAuth(){
-  const params=new URLSearchParams(location.search);
-  const code=params.get('code');
-  if(code){
-    const verifier=localStorage.getItem('mdapp_dbx_verifier');
-    const ak=localStorage.getItem('mdapp_dbx_key');
-    try{
-      const r=await fetch('https://api.dropboxapi.com/oauth2/token',{
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:new URLSearchParams({code,grant_type:'authorization_code',client_id:ak,code_verifier:verifier,redirect_uri:location.origin+location.pathname}),
-      });
-      const d=await r.json();
-      if(d.access_token){
-        dbxToken=d.access_token;
-        localStorage.setItem('mdapp_dbx_token',dbxToken);
-        localStorage.removeItem('mdapp_dbx_verifier');
-        window.history.replaceState({},'',location.pathname);
-        onConnected();
-      }
-    }catch(e){console.error(e);}
-    return;
-  }
-  const t=localStorage.getItem('mdapp_dbx_token');
-  if(t){dbxToken=t;onConnected();}
-}
-function onConnected(){
-  dbxStatus.textContent='接続中'; dbxStatus.classList.add('on');
-  dbxConnectBtn.textContent='切断'; dbxConnectBtn.classList.add('on');
-  loadTree(fileTree,dbxPath||'');
-}
-async function startAuth(){
-  const{verifier,challenge}=await genPKCE();
-  localStorage.setItem('mdapp_dbx_verifier',verifier);
-  location.href='https://www.dropbox.com/oauth2/authorize?'+new URLSearchParams({
-    client_id:appKey,response_type:'code',
-    code_challenge:challenge,code_challenge_method:'S256',
-    redirect_uri:location.origin+location.pathname,token_access_type:'offline',
-  });
-}
-
-// ── events ──
-undoBtn.addEventListener('click',()=>{if(view)undo(view);});
-redoBtn.addEventListener('click',()=>{if(view)redo(view);});
-overwriteBtn.addEventListener('click',saveOverwrite);
-exportBtn.addEventListener('click',exportFile);
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='s'){e.preventDefault();saveOverwrite();}});
-
-document.getElementById('refresh-btn').addEventListener('click',()=>{if(dbxToken)loadTree(fileTree,dbxPath||'');});
-
-document.getElementById('new-file-btn').addEventListener('click',()=>{
-  if(!dbxToken){alert('先に接続してください');return;}
-  document.getElementById('newfile-input').value='';
-  newfileModal.classList.add('v');
-  setTimeout(()=>document.getElementById('newfile-input').focus(),50);
-});
-document.getElementById('newfile-cancel').addEventListener('click',()=>newfileModal.classList.remove('v'));
-document.getElementById('newfile-ok').addEventListener('click',async()=>{
-  const n=document.getElementById('newfile-input').value.trim();
-  if(!n)return;
-  newfileModal.classList.remove('v');
-  await createNewFile(n);
-});
-document.getElementById('newfile-input').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('newfile-ok').click();});
-
-document.getElementById('new-folder-btn').addEventListener('click',()=>{
-  if(!dbxToken){alert('先に接続してください');return;}
-  document.getElementById('newfolder-input').value='';
-  newfolderModal.classList.add('v');
-  setTimeout(()=>document.getElementById('newfolder-input').focus(),50);
-});
-document.getElementById('newfolder-cancel').addEventListener('click',()=>newfolderModal.classList.remove('v'));
-document.getElementById('newfolder-ok').addEventListener('click',async()=>{
-  const n=document.getElementById('newfolder-input').value.trim();
-  if(!n)return;
-  newfolderModal.classList.remove('v');
-  await createNewFolder(n);
-});
-document.getElementById('newfolder-input').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('newfolder-ok').click();});
-
-dbxConnectBtn.addEventListener('click',()=>{
-  if(dbxToken){
-    if(!confirm('Dropbox接続を解除しますか？'))return;
-    dbxToken=null;
-    localStorage.removeItem('mdapp_dbx_token');
-    dbxStatus.textContent='未接続'; dbxStatus.classList.remove('on');
-    dbxConnectBtn.textContent='Dropbox 接続'; dbxConnectBtn.classList.remove('on');
-    fileTree.innerHTML='<div class="tree-msg">接続してください</div>';
-    return;
-  }
-  if(!appKey){akInput.value=appKey;dpInput.value=dbxPath;dbxModal.classList.add('v');return;}
-  startAuth();
-});
-document.getElementById('dbx-modal-cancel').addEventListener('click',()=>dbxModal.classList.remove('v'));
-document.getElementById('dbx-modal-ok').addEventListener('click',()=>{
-  const k=akInput.value.trim(); if(!k)return;
-  appKey=k; localStorage.setItem('mdapp_dbx_key',k);
-  dbxPath=dpInput.value.trim(); localStorage.setItem('mdapp_dbx_path',dbxPath);
-  dbxModal.classList.remove('v');
-  startAuth();
-});
-
-// settings
-settingsBtn.addEventListener('click',()=>{
-  document.getElementById('cfg-font').value=cfg.font;
-  document.getElementById('cfg-preview-font').value=cfg.previewFont;
-  document.getElementById('cfg-size').value=cfg.size;
-  document.getElementById('cfg-lh').value=cfg.lh;
-  document.getElementById('cfg-theme').value=cfg.theme||'dark';
-  document.getElementById('cfg-path').value=dbxPath;
-  settingsModal.classList.add('v');
-});
-document.getElementById('settings-cancel').addEventListener('click',()=>settingsModal.classList.remove('v'));
-document.getElementById('settings-ok').addEventListener('click',()=>{
-  cfg.font=document.getElementById('cfg-font').value;
-  cfg.previewFont=document.getElementById('cfg-preview-font').value;
-  cfg.size=parseInt(document.getElementById('cfg-size').value);
-  cfg.lh=parseFloat(document.getElementById('cfg-lh').value);
-  cfg.theme=document.getElementById('cfg-theme').value;
-  localStorage.setItem('mdapp_cfg',JSON.stringify(cfg));
-  applyTheme(cfg.theme==='dark');
-  const newPath=document.getElementById('cfg-path').value.trim();
-  if(newPath!==dbxPath){
-    dbxPath=newPath;
-    localStorage.setItem('mdapp_dbx_path',dbxPath);
-    if(dbxToken) loadTree(fileTree,dbxPath||'');
-  }
-  applyFontCfg();
-  if(view&&currentPath){const d=getValue();buildEditor(d);}
-  settingsModal.classList.remove('v');
-});
-
-// ── init ──
-applyTheme(cfg.theme!=='light');
-buildEditor('');
-checkAuth();
-</script>
-
-</body>
-</html>
+  if(view&&currentPath
