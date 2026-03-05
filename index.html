@@ -75,6 +75,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 #toggle-sidebar{background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:22px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1}
 #toggle-sidebar:hover{color:var(--accent)}
 #filename-display{flex:1;font-size:14px;color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px}
+@media(max-width:768px){#filename-display{display:none}#filename-status{display:block !important}}
 #filename-display b{color:var(--text);font-weight:400}
 #unsaved-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:none;flex-shrink:0}
 #unsaved-dot.v{display:block}
@@ -183,6 +184,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
       <div id="preview"></div>
     </div>
     <div id="statusbar">
+      <span id="filename-status" style="display:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;color:var(--text-mid)">—</span>
       <span id="st-chars">—</span>
       <span id="st-lines">—</span>
       <span id="st-mode">—</span>
@@ -528,6 +530,7 @@ async function openFile(path,name,row){
     const text=await dbxDownload(path);
     currentPath=path;
     fnDisplay.innerHTML='<b>'+name+'</b>';
+    document.getElementById('filename-status').textContent=name;
     emptyState.classList.add('hidden');
     cmHost.style.display='';
     if(!view) buildEditor(text); else setValue(text);
