@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" data-theme="dark">
+<html lang="ja" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -295,11 +295,11 @@ let appKey   = localStorage.getItem('mdapp_dbx_key') || '';
 let dbxPath  = localStorage.getItem('mdapp_dbx_path') || '';
 let currentPath = null;
 let currentFolder = ''; // 今開いてるフォルダ
-let isPreview = false, unsaved = false, isDark = true;
+let isPreview = false, unsaved = false, isDark = false;
 
 // cfg
 let cfg = JSON.parse(localStorage.getItem('mdapp_cfg') || '{}');
-cfg = {font:"'IBM Plex Mono',monospace", previewFont:"'Spectral',serif", size:13, lh:1.8, theme:'dark', ...cfg};
+cfg = {font:"'IBM Plex Mono',monospace", previewFont:"'Spectral',serif", size:16, lh:1.9, theme:'light', ...cfg};
 
 // ── elements ──
 const sidebar       = document.getElementById('sidebar');
@@ -345,15 +345,15 @@ applyFontCfg();
 function makeHL(dark){
   return HighlightStyle.define([
     {tag:[tags.heading1,tags.heading2,tags.heading3,tags.heading4,tags.heading5,tags.heading6],color:dark?'#c8a96e':'#8a6830',fontWeight:'400'},
-    {tag:tags.strong,color:dark?'#e0dbd2':'#1a1612',fontWeight:'700'},
-    {tag:tags.emphasis,color:dark?'#a8b8d0':'#3a5070',fontStyle:'italic'},
-    {tag:tags.monospace,color:dark?'#9ec49a':'#2a6a30'},
-    {tag:tags.strikethrough,color:dark?'#4a4641':'#b0aa9f',textDecoration:'line-through'},
-    {tag:tags.link,color:dark?'#c8a96e':'#8a6830'},
-    {tag:tags.url,color:dark?'#5a4a2a':'#c4a060'},
-    {tag:tags.quote,color:dark?'#5a5550':'#8a8078',fontStyle:'italic'},
-    {tag:tags.meta,color:dark?'#4a4641':'#aaa49a'},
-    {tag:tags.processingInstruction,color:dark?'#4a4641':'#aaa49a'},
+    {tag:tags.strong,color:dark?'#e0dbd2':'#0a0806',fontWeight:'700'},
+    {tag:tags.emphasis,color:dark?'#a8b8d0':'#2a4060',fontStyle:'italic'},
+    {tag:tags.monospace,color:dark?'#9ec49a':'#1a5a28'},
+    {tag:tags.strikethrough,color:dark?'#4a4641':'#a0a09a',textDecoration:'line-through'},
+    {tag:tags.link,color:dark?'#c8a96e':'#7a5018'},
+    {tag:tags.url,color:dark?'#5a4a2a':'#b09040'},
+    {tag:tags.quote,color:dark?'#5a5550':'#706860',fontStyle:'italic'},
+    {tag:tags.meta,color:dark?'#4a4641':'#909088'},
+    {tag:tags.processingInstruction,color:dark?'#4a4641':'#909088'},
   ]);
 }
 function makeTheme(dark){
