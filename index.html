@@ -12,6 +12,7 @@
 <meta name="theme-color" content="#0e0e0e">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;1,300&family=IBM+Plex+Sans:wght@300;400&family=Spectral:ital,wght@0,300;0,400;1,300&family=Noto+Serif+JP:wght@300;400&display=swap');
 
 [data-theme="dark"]{
@@ -37,7 +38,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 
 #sidebar-top{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px}
 #sidebar-top-label{font-size:9px;letter-spacing:.22em;color:var(--text-dim);text-transform:uppercase;flex:1}
-.icon-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:20px;padding:6px 10px;border-radius:2px;transition:color .15s,background .15s;line-height:1;font-family:'IBM Plex Mono',monospace}
+.icon-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:20px;padding:6px 10px;border-radius:2px;transition:color .15s,background .15s;line-height:1;display:flex;align-items:center}
 .icon-btn:hover{color:var(--accent);background:var(--bg3)}
 .icon-btn:active{opacity:.7}
 
@@ -140,20 +141,21 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 .modal-actions button:hover{border-color:var(--accent);color:var(--accent)}
 .modal-actions button.primary{border-color:var(--accent);color:var(--accent)}
 
+.material-icon{font-family:'Material Symbols Outlined';font-style:normal;font-size:20px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24}
+.tbtn .material-icon{font-size:18px;vertical-align:middle}
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/eruda/3.0.1/eruda.min.js"></script><script>eruda.init();</script>
 </head>
 <body>
 <div id="app">
   <!-- SIDEBAR -->
   <div id="sidebar">
     <div id="sidebar-top">
-      <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル">＋</button>
-      <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ">□</button>
-      <button type="button" class="icon-btn" id="refresh-btn" title="更新">↻</button>
+      <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル"><span class="material-icon">add</span></button>
+      <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ"><span class="material-icon">create_new_folder</span></button>
+      <button type="button" class="icon-btn" id="refresh-btn" title="更新"><span class="material-icon">refresh</span></button>
     </div>
     <div id="file-tree"><div class="tree-msg">接続してください</div></div>
     <div id="sidebar-bottom">
@@ -166,14 +168,14 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   <!-- MAIN -->
   <div id="main">
     <div id="toolbar">
-      <button type="button" id="toggle-sidebar">☰</button>
+      <button type="button" id="toggle-sidebar"><span class="material-icon">menu</span></button>
+      <button type="button" class="tbtn on" id="mode-btn">表示</button>
       <div id="filename-display"><b>—</b></div>
       <div id="unsaved-dot"></div>
-      <button type="button" class="tbtn" id="undo-btn" title="取り消し">↩</button>
-      <button type="button" class="tbtn" id="redo-btn" title="やり直し">↪</button>
-      <button type="button" class="tbtn on" id="mode-btn">編集</button>
-      <button type="button" class="tbtn" id="overwrite-btn">上書き</button>
-      <button type="button" class="tbtn" id="export-btn">書き出し</button>
+      <button type="button" class="tbtn" id="undo-btn" title="取り消し"><span class="material-icon">undo</span></button>
+      <button type="button" class="tbtn" id="redo-btn" title="やり直し"><span class="material-icon">redo</span></button>
+      <button type="button" class="tbtn" id="overwrite-btn" title="上書き保存"><span class="material-icon">save</span></button>
+      <button type="button" class="tbtn" id="export-btn" title="書き出し"><span class="material-icon">download</span></button>
     </div>
     <div id="editor-wrap">
       <div id="empty-state">Dropboxに接続してファイルを選択</div>
@@ -593,7 +595,7 @@ modeBtn.addEventListener('click',()=>{
     modeBtn.textContent='編集'; stM.textContent='プレビュー';
   }else{
     previewEl.classList.remove('v'); cmHost.style.display='';
-    modeBtn.textContent='プレビュー'; stM.textContent='編集'; view.focus();
+    modeBtn.textContent='表示'; stM.textContent='編集中'; view.focus();
   }
   modeBtn.classList.toggle('on',!isPreview);
 });
