@@ -144,6 +144,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     <h3>Dropbox 設定</h3>
     <p><a href="https://www.dropbox.com/developers/apps" target="_blank" style="color:var(--accent)">dropbox.com/developers/apps</a> でアプリを作成し App Key を入力。<br>Redirect URI にこのページの URL を設定。<br>Permission: <code style="color:#a8c5a0">files.content.read / write</code></p>
     <input id="appkey-input" type="text" placeholder="App Key">
+    <input id="dbxpath-input" type="text" placeholder="フォルダパス（例: /md関連）空白でルート">
     <div id="modal-actions"><button id="modal-cancel">キャンセル</button><button id="modal-ok">接続する</button></div>
   </div>
 </div>
@@ -159,6 +160,7 @@ import {tags} from 'https://esm.sh/@lezer/highlight@1';
 const SKEY = 'mdapp_v4';
 let files = {}, currentFile = null, isPreview = false, unsaved = false;
 let dbxToken = null, appKey = localStorage.getItem('mdapp_dbx_key') || '';
+let dbxPath = localStorage.getItem('mdapp_dbx_path') || '';
 
 const fnInput = document.getElementById('filename-input');
 const modeBtn = document.getElementById('mode-btn');
@@ -174,6 +176,7 @@ const previewEl  = document.getElementById('preview');
 const cmHost = document.getElementById('cm-host');
 const modal  = document.getElementById('modal-overlay');
 const akInput= document.getElementById('appkey-input');
+const dbxPathInput = document.getElementById('dbxpath-input');
 const fileListEl = document.getElementById('file-list');
 
 // --- Highlight style ---
@@ -414,7 +417,7 @@ async function loadDbxFiles() {
     const r = await fetch('https://api.dropboxapi.com/2/files/list_folder',{
       method:'POST',
       headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/json'},
-      body:JSON.stringify({path:'',recursive:false})
+      body:JSON.stringify({path:dbxPath,recursive:true})
     });
     const d = await r.json();
     dbxFilesEl.innerHTML = '';
@@ -450,14 +453,19 @@ async function saveToDropbox() {
 
 dbxBtn.addEventListener('click', connectDbx);
 document.getElementById('modal-cancel').addEventListener('click',()=>modal.classList.remove('v'));
+
 document.getElementById('modal-ok').addEventListener('click',()=>{
   const k = akInput.value.trim();
   if (!k) return;
   appKey = k;
-  localStorage.setItem('mdapp_dbx_key',k);
+  localStorage.setItem('mdapp_dbx_key', k);
+  const p = dbxPathInput.value.trim();
+  dbxPath = p;
+  localStorage.setItem('mdapp_dbx_path', p);
   modal.classList.remove('v');
   startDbxAuth();
 });
+
 
 // --- Init ---
 loadSt();
