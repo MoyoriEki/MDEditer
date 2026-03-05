@@ -285,12 +285,17 @@ async function dbxFetch(endpoint, body){
   return r.json();
 }
 
+// Firefoxはヘッダーにnon-ASCII不可なのでUnicodeエスケープ
+function dbxArg(obj){
+  return JSON.stringify(obj).replace(/[\u0080-\uFFFF]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
+}
+
 async function dbxDownload(path){
   const r = await fetch('https://content.dropboxapi.com/2/files/download',{
     method:'POST',
     headers:{
       'Authorization':'Bearer '+dbxToken,
-      'Dropbox-API-Arg':JSON.stringify({path}),
+      'Dropbox-API-Arg':dbxArg({path}),
     },
   });
   if(!r.ok) throw new Error('Download error '+r.status+': '+await r.text());
@@ -303,7 +308,7 @@ async function dbxUpload(path, content){
     headers:{
       'Authorization':'Bearer '+dbxToken,
       'Content-Type':'application/octet-stream',
-      'Dropbox-API-Arg':JSON.stringify({path,mode:'overwrite',autorename:false}),
+      'Dropbox-API-Arg':dbxArg({path,mode:'overwrite',autorename:false}),
     },
     body:content,
   });
