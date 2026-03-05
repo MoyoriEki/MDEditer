@@ -3,7 +3,7 @@
 <html lang="ja" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>md</title>
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
@@ -93,6 +93,7 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 #cm-host{flex:1;overflow:hidden;display:flex;flex-direction:column}
 #cm-host .cm-editor{flex:1;height:100% !important;background:var(–bg) !important;outline:none}
 #cm-host .cm-scroller{line-height:1.8;padding:32px 64px;overflow:auto}
+@media(max-width:768px){#cm-host .cm-scroller{padding:16px 18px !important}#preview{padding:20px 18px !important}}
 #cm-host .cm-content{caret-color:var(–accent)}
 #cm-host .cm-cursor{border-left:2px solid var(–accent) !important}
 #cm-host .cm-selectionBackground{background:rgba(200,169,110,.13) !important}
@@ -130,7 +131,7 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 .modal-box p{font-size:11px;color:var(–text-mid);line-height:1.8;margin-bottom:14px}
 .modal-box label{display:block;font-size:10px;letter-spacing:.1em;color:var(–text-dim);text-transform:uppercase;margin-bottom:5px;margin-top:12px}
 .modal-box label:first-of-type{margin-top:0}
-.modal-box input,.modal-box select{width:100%;background:var(–bg);border:1px solid var(–border2);color:var(–text);font-family:‘IBM Plex Mono’,monospace;font-size:12px;padding:9px 10px;outline:none;border-radius:2px;transition:border-color .15s}
+.modal-box input,.modal-box select{width:100%;background:var(–bg);border:1px solid var(–border2);color:var(–text);font-family:‘IBM Plex Mono’,monospace;font-size:16px;padding:9px 10px;outline:none;border-radius:2px;transition:border-color .15s}
 .modal-box input:focus,.modal-box select:focus{border-color:var(–accent)}
 .modal-box select option{background:var(–bg2)}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
@@ -171,7 +172,6 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
       <button class="tbtn" id="undo-btn">↩ 取消</button>
       <button class="tbtn" id="redo-btn">↪ やり直し</button>
       <button class="tbtn on" id="mode-btn">編集</button>
-      <button class="tbtn" id="theme-btn">ライト</button>
       <button class="tbtn" id="overwrite-btn">上書き</button>
       <button class="tbtn" id="export-btn">書き出し</button>
       <button class="tbtn" id="settings-btn">設定</button>
@@ -215,6 +215,11 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 <div class="modal-overlay" id="settings-modal">
   <div class="modal-box">
     <h3>設定</h3>
+    <label>テーマ</label>
+    <select id="cfg-theme">
+      <option value="dark">ダーク</option>
+      <option value="light">ライト</option>
+    </select>
     <label>エディタフォント</label>
     <select id="cfg-font">
       <option value="'IBM Plex Mono',monospace">IBM Plex Mono</option>
@@ -296,11 +301,11 @@ let appKey   = localStorage.getItem('mdapp_dbx_key') || '';
 let dbxPath  = localStorage.getItem('mdapp_dbx_path') || '';
 let currentPath = null;
 let currentFolder = ''; // 今開いてるフォルダ
-let isPreview = false, unsaved = false, isDark = true;
+let isPreview = false, unsaved = false, isDark = (cfg.theme !== 'light');
 
 // cfg
 let cfg = JSON.parse(localStorage.getItem('mdapp_cfg') || '{}');
-cfg = {font:"'IBM Plex Mono',monospace", previewFont:"'Spectral',serif", size:13, lh:1.8, ...cfg};
+cfg = {font:"'IBM Plex Mono',monospace", previewFont:"'Spectral',serif", size:13, lh:1.8, theme:'dark', ...cfg};
 
 // ── elements ──
 const sidebar       = document.getElementById('sidebar');
@@ -311,7 +316,6 @@ const emptyState    = document.getElementById('empty-state');
 const cmHost        = document.getElementById('cm-host');
 const previewEl     = document.getElementById('preview');
 const modeBtn       = document.getElementById('mode-btn');
-const themeBtn      = document.getElementById('theme-btn');
 const overwriteBtn  = document.getElementById('overwrite-btn');
 const exportBtn     = document.getElementById('export-btn');
 const settingsBtn   = document.getElementById('settings-btn');
@@ -391,13 +395,12 @@ function setValue(text){
 function applyTheme(dark){
   isDark=dark;
   document.documentElement.dataset.theme=dark?'dark':'light';
-  themeBtn.textContent=dark?'ライト':'ダーク';
   if(view&&currentPath){const d=getValue();buildEditor(d);}
 }
-themeBtn.addEventListener('click',()=>applyTheme(!isDark));
 
 // ── sidebar ──
-let sidebarOpen=true;
+let sidebarOpen=window.innerWidth>768;
+if(!sidebarOpen) sidebar.classList.add('collapsed');
 document.getElementById('toggle-sidebar').addEventListener('click',()=>{
   sidebarOpen=!sidebarOpen;
   sidebar.classList.toggle('collapsed',!sidebarOpen);
@@ -714,6 +717,7 @@ settingsBtn.addEventListener('click',()=>{
   document.getElementById('cfg-preview-font').value=cfg.previewFont;
   document.getElementById('cfg-size').value=cfg.size;
   document.getElementById('cfg-lh').value=cfg.lh;
+  document.getElementById('cfg-theme').value=cfg.theme||'dark';
   document.getElementById('cfg-path').value=dbxPath;
   settingsModal.classList.add('v');
 });
@@ -723,7 +727,9 @@ document.getElementById('settings-ok').addEventListener('click',()=>{
   cfg.previewFont=document.getElementById('cfg-preview-font').value;
   cfg.size=parseInt(document.getElementById('cfg-size').value);
   cfg.lh=parseFloat(document.getElementById('cfg-lh').value);
+  cfg.theme=document.getElementById('cfg-theme').value;
   localStorage.setItem('mdapp_cfg',JSON.stringify(cfg));
+  applyTheme(cfg.theme==='dark');
   const newPath=document.getElementById('cfg-path').value.trim();
   if(newPath!==dbxPath){
     dbxPath=newPath;
@@ -736,6 +742,7 @@ document.getElementById('settings-ok').addEventListener('click',()=>{
 });
 
 // ── init ──
+applyTheme(cfg.theme!=='light');
 buildEditor('');
 checkAuth();
 </script>
