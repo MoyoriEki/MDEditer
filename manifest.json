@@ -1,0 +1,22 @@
+{
+  "name": "md editor",
+  "short_name": "md",
+  "description": "Dropbox連携Markdownエディタ",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0e0e0e",
+  "theme_color": "#0e0e0e",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192x192/0e0e0e/c8a96e?text=md",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512x512/0e0e0e/c8a96e?text=md",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
