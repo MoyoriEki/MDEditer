@@ -75,7 +75,8 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 #toggle-sidebar{background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:22px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1}
 #toggle-sidebar:hover{color:var(--accent)}
 #filename-display{flex:1;font-size:14px;color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px}
-@media(max-width:768px){#filename-display{display:none}#filename-status{display:block !important}}
+@media(max-width:768px){#filename-display{display:none}#filename-status{display:block !important}#toolbar-spacer{flex:1}}
+#toolbar-spacer{flex:0}
 #filename-display b{color:var(--text);font-weight:400}
 #unsaved-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:none;flex-shrink:0}
 #unsaved-dot.v{display:block}
@@ -171,6 +172,7 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     <div id="toolbar">
       <button type="button" id="toggle-sidebar"><span class="material-icon">menu</span></button>
       <div id="filename-display"><b>—</b></div>
+      <div id="toolbar-spacer"></div>
       <div id="unsaved-dot"></div>
       <button type="button" class="tbtn on" id="mode-btn" title="プレビュー切替">⟨⟩</button>
       <button type="button" class="tbtn" id="undo-btn" title="取り消し"><span class="material-icon">undo</span></button>
@@ -531,6 +533,8 @@ async function openFile(path,name,row){
     currentPath=path;
     fnDisplay.innerHTML='<b>'+name+'</b>';
     document.getElementById('filename-status').textContent=name;
+    localStorage.setItem('mdapp_last_path', path);
+    localStorage.setItem('mdapp_last_name', name);
     emptyState.classList.add('hidden');
     cmHost.style.display='';
     if(!view) buildEditor(text); else setValue(text);
@@ -640,6 +644,23 @@ function onConnected(){
   dbxStatus.textContent='接続中'; dbxStatus.classList.add('on');
   dbxConnectBtn.textContent='切断'; dbxConnectBtn.classList.add('on');
   loadTree(fileTree,dbxPath||'');
+  // 最後に開いたファイルを自動で開く
+  const lastPath=localStorage.getItem('mdapp_last_path');
+  const lastName=localStorage.getItem('mdapp_last_name');
+  if(lastPath&&lastName){
+    setTimeout(async()=>{
+      try{
+        const text=await dbxDownload(lastPath);
+        currentPath=lastPath;
+        fnDisplay.innerHTML='<b>'+lastName+'</b>';
+        document.getElementById('filename-status').textContent=lastName;
+        emptyState.classList.add('hidden');
+        cmHost.style.display='';
+        if(!view) buildEditor(text); else setValue(text);
+        setUnsaved(false); updateStatus(); stM.textContent='編集';
+      }catch(e){console.warn('前回ファイルの読み込み失敗',e);}
+    },500);
+  }
 }
 async function startAuth(){
   const{verifier,challenge}=await genPKCE();
