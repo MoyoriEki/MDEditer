@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>md</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;1,300&family=Spectral:ital,wght@0,300;0,400;1,300&display=swap');
+
+:root {
+  --bg:#0e0e0e;--bg2:#161616;--bg3:#1e1e1e;--border:#2a2a2a;
+  --text:#d4cfc8;--text-dim:#5a5550;--accent:#c8a96e;--accent-dim:#6b5a38;
+  --danger:#8b3a3a;--sidebar-w:220px;
+  --c-head:var(--accent);
+  --c-strong:#e8e4de;
+  --c-em:#b8c4d8;
+  --c-code:#a8c5a0;
+  --c-sym:var(--text-dim);
+  --c-quote:var(--text-dim);
+  --c-link:var(--accent);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;height:100vh;display:flex;overflow:hidden}
+
+#sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+#sidebar-header{padding:16px 14px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+#sidebar-header span{font-size:10px;letter-spacing:.2em;color:var(--text-dim);text-transform:uppercase}
+#new-file-btn{background:none;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-family:inherit;font-size:16px;line-height:1;padding:2px 7px 4px;border-radius:2px;transition:all .15s}
+#new-file-btn:hover{border-color:var(--accent);color:var(--accent)}
+#file-list{flex:1;overflow-y:auto;padding:8px 0}
+.file-item{padding:8px 14px;font-size:12px;cursor:pointer;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;transition:color .1s;border-left:2px solid transparent}
+.file-item:hover{color:var(--text)}
+.file-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(200,169,110,.05)}
+.file-del{margin-left:auto;opacity:0;font-size:14px;color:var(--danger);transition:opacity .1s;flex-shrink:0}
+.file-item:hover .file-del{opacity:1}
+#dropbox-section{border-top:1px solid var(--border);padding:12px 14px}
+#dropbox-btn{width:100%;background:none;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:.1em;padding:7px;border-radius:2px;transition:all .15s;text-transform:uppercase}
+#dropbox-btn:hover{border-color:#0061fe;color:#0061fe}
+#dropbox-btn.connected{border-color:var(--accent-dim);color:var(--accent)}
+#dropbox-files{margin-top:8px;max-height:120px;overflow-y:auto}
+.dbx-file{padding:5px 4px;font-size:11px;color:var(--text-dim);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .1s}
+.dbx-file:hover{color:var(--accent)}
+
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#toolbar{display:flex;align-items:center;padding:10px 20px;border-bottom:1px solid var(--border);gap:12px;background:var(--bg)}
+#filename-input{background:none;border:none;border-bottom:1px solid transparent;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:13px;outline:none;flex:1;transition:border-color .15s;padding:2px 0}
+#filename-input:focus{border-bottom-color:var(--accent)}
+.tbtn{background:none;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:.12em;padding:5px 10px;border-radius:2px;transition:all .15s;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.tbtn:hover{border-color:var(--accent);color:var(--accent)}
+.tbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(200,169,110,.08)}
+#unsaved-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:none;flex-shrink:0}
+#unsaved-dot.v{display:block}
+
+#editor-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
+
+/* CodeMirror 6 */
+#cm-host{flex:1;overflow:hidden;display:flex;flex-direction:column}
+#cm-host .cm-editor{flex:1;overflow:auto;background:var(--bg);outline:none;font-family:'IBM Plex Mono',monospace;font-size:14px}
+#cm-host .cm-scroller{padding:20px 48px;line-height:1.75;overflow:auto}
+#cm-host .cm-content{font-family:'IBM Plex Mono',monospace;color:var(--text);caret-color:var(--accent)}
+#cm-host .cm-cursor{border-left:2px solid var(--accent)}
+#cm-host .cm-selectionBackground{background:rgba(200,169,110,.15) !important}
+#cm-host .cm-focused .cm-selectionBackground{background:rgba(200,169,110,.2) !important}
+#cm-host .cm-gutters{display:none}
+#cm-host .cm-activeLineGutter{display:none}
+/* markdown tokens */
+#cm-host .cm-header,.cm-s-default .cm-header{color:var(--c-head) !important}
+#cm-host .tok-heading{color:var(--c-head) !important}
+#cm-host .tok-heading-1,.tok-heading-2,.tok-heading-3{color:var(--c-head) !important}
+#cm-host .tok-strong{color:var(--c-strong) !important;font-weight:700 !important}
+#cm-host .tok-emphasis{color:var(--c-em) !important;font-style:italic !important}
+#cm-host .tok-monospace,.tok-code{color:var(--c-code) !important}
+#cm-host .tok-meta,.tok-processingInstruction{color:var(--c-sym) !important}
+#cm-host .tok-quote{color:var(--c-quote) !important;font-style:italic !important}
+#cm-host .tok-link{color:var(--c-link) !important}
+#cm-host .tok-url{color:var(--accent-dim) !important}
+
+#preview{display:none;flex:1;overflow-y:auto;padding:32px 48px;font-family:'Spectral',serif;font-size:15px;line-height:1.85;color:var(--text)}
+#preview.v{display:block}
+#preview h1,#preview h2,#preview h3{font-family:'IBM Plex Mono',monospace;font-weight:300;color:var(--accent);margin:1.8em 0 .5em}
+#preview h1{font-size:1.6em}#preview h2{font-size:1.25em}#preview h3{font-size:1.05em}
+#preview p{margin:0 0 1.1em}
+#preview code{font-family:'IBM Plex Mono',monospace;font-size:.9em;background:var(--bg3);padding:1px 5px;border-radius:2px;color:#a8c5a0}
+#preview pre{background:var(--bg3);padding:16px 20px;border-radius:3px;overflow-x:auto;margin:0 0 1.1em;border-left:2px solid var(--accent-dim)}
+#preview pre code{background:none;padding:0}
+#preview blockquote{border-left:2px solid var(--accent-dim);margin:0 0 1.1em;padding:4px 0 4px 20px;color:var(--text-dim);font-style:italic}
+#preview ul,#preview ol{margin:0 0 1.1em;padding-left:1.5em}
+#preview li{margin:.3em 0}
+#preview a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-dim)}
+#preview hr{border:none;border-top:1px solid var(--border);margin:2em 0}
+#preview table{border-collapse:collapse;width:100%;margin:0 0 1.1em;font-size:.9em;font-family:'IBM Plex Mono',monospace}
+#preview th,#preview td{border:1px solid var(--border);padding:6px 12px}
+#preview th{color:var(--accent);background:var(--bg2)}
+
+#statusbar{border-top:1px solid var(--border);padding:5px 20px;display:flex;gap:20px;font-size:10px;color:var(--text-dim);letter-spacing:.08em;background:var(--bg2)}
+
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center}
+#modal-overlay.v{display:flex}
+#modal{background:var(--bg2);border:1px solid var(--border);padding:24px;width:380px;border-radius:3px}
+#modal h3{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:12px;font-weight:400}
+#modal p{font-size:11px;color:var(--text-dim);line-height:1.7;margin-bottom:14px}
+#modal input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 10px;outline:none;border-radius:2px;margin-bottom:12px;transition:border-color .15s}
+#modal input:focus{border-color:var(--accent)}
+#modal-actions{display:flex;gap:8px;justify-content:flex-end}
+#modal-actions button{background:none;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:.1em;padding:6px 14px;border-radius:2px;text-transform:uppercase;transition:all .15s}
+#modal-actions button:hover{border-color:var(--accent);color:var(--accent)}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header"><span>files</span><button id="new-file-btn">+</button></div>
+  <div id="file-list"></div>
+  <div id="dropbox-section">
+    <button id="dropbox-btn">Dropbox 接続</button>
+    <div id="dropbox-files"></div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="toolbar">
+    <input id="filename-input" type="text" value="untitled.md" spellcheck="false">
+    <div id="unsaved-dot"></div>
+    <button class="tbtn on" id="mode-btn">edit</button>
+    <button class="tbtn" id="save-btn">保存 ⌘S</button>
+  </div>
+  <div id="editor-wrap">
+    <div id="cm-host"></div>
+    <div id="preview"></div>
+  </div>
+  <div id="statusbar">
+    <span id="st-chars">0 文字</span>
+    <span id="st-lines">0 行</span>
+    <span id="st-mode">編集</span>
+  </div>
+</div>
+
+<div id="modal-overlay">
+  <div id="modal">
+    <h3>Dropbox 設定</h3>
+    <p><a href="https://www.dropbox.com/developers/apps" target="_blank" style="color:var(--accent)">dropbox.com/developers/apps</a> でアプリを作成し App Key を入力。<br>Redirect URI にこのページの URL を設定。<br>Permission: <code style="color:#a8c5a0">files.content.read / write</code></p>
+    <input id="appkey-input" type="text" placeholder="App Key">
+    <div id="modal-actions"><button id="modal-cancel">キャンセル</button><button id="modal-ok">接続する</button></div>
+  </div>
+</div>
+
+<script type="module">
+import {EditorView, keymap, highlightActiveLine} from 'https://esm.sh/@codemirror/view@6';
+import {EditorState} from 'https://esm.sh/@codemirror/state@6';
+import {markdown} from 'https://esm.sh/@codemirror/lang-markdown@6';
+import {defaultKeymap, historyKeymap, history, insertNewlineAndIndent} from 'https://esm.sh/@codemirror/commands@6';
+import {syntaxHighlighting, HighlightStyle} from 'https://esm.sh/@codemirror/language@6';
+import {tags} from 'https://esm.sh/@lezer/highlight@1';
+
+const SKEY = 'mdapp_v4';
+let files = {}, currentFile = null, isPreview = false, unsaved = false;
+let dbxToken = null, appKey = localStorage.getItem('mdapp_dbx_key') || '';
+
+const fnInput = document.getElementById('filename-input');
+const modeBtn = document.getElementById('mode-btn');
+const saveBtn = document.getElementById('save-btn');
+const newBtn  = document.getElementById('new-file-btn');
+const dbxBtn  = document.getElementById('dropbox-btn');
+const dbxFilesEl = document.getElementById('dropbox-files');
+const udot = document.getElementById('unsaved-dot');
+const stC  = document.getElementById('st-chars');
+const stL  = document.getElementById('st-lines');
+const stM  = document.getElementById('st-mode');
+const previewEl  = document.getElementById('preview');
+const cmHost = document.getElementById('cm-host');
+const modal  = document.getElementById('modal-overlay');
+const akInput= document.getElementById('appkey-input');
+const fileListEl = document.getElementById('file-list');
+
+// --- Highlight style ---
+const mdHighlight = HighlightStyle.define([
+  {tag: [tags.heading1, tags.heading2, tags.heading3, tags.heading4, tags.heading5, tags.heading6],
+   color:'#c8a96e', fontWeight:'400'},
+  {tag: tags.strong, color:'#e8e4de', fontWeight:'700'},
+  {tag: tags.emphasis, color:'#b8c4d8', fontStyle:'italic'},
+  {tag: tags.monospace, color:'#a8c5a0'},
+  {tag: tags.strikethrough, color:'#5a5550', textDecoration:'line-through'},
+  {tag: tags.link, color:'#c8a96e'},
+  {tag: tags.url, color:'#6b5a38'},
+  {tag: tags.quote, color:'#5a5550', fontStyle:'italic'},
+  {tag: tags.meta, color:'#5a5550'},
+  {tag: tags.processingInstruction, color:'#5a5550'},
+  {tag: tags.contentSeparator, color:'#2a2a2a'},
+]);
+
+// --- Editor ---
+function makeState(doc) {
+  return EditorState.create({
+    doc,
+    extensions: [
+      history(),
+      keymap.of([
+        ...defaultKeymap,
+        ...historyKeymap,
+        {key:'Mod-s', run(){ saveFile(); return true; }},
+      ]),
+      markdown(),
+      syntaxHighlighting(mdHighlight),
+      EditorView.lineWrapping,
+      EditorView.theme({
+        '&': {background:'#0e0e0e', color:'#d4cfc8', height:'100%'},
+        '.cm-scroller': {fontFamily:"'IBM Plex Mono',monospace", fontSize:'14px', lineHeight:'1.75', padding:'20px 48px', overflow:'auto'},
+        '.cm-content': {caretColor:'#c8a96e'},
+        '.cm-cursor': {borderLeft:'2px solid #c8a96e'},
+        '.cm-selectionBackground': {background:'rgba(200,169,110,.15)'},
+        '&.cm-focused .cm-selectionBackground': {background:'rgba(200,169,110,.2)'},
+        '.cm-gutters': {display:'none'},
+        '.cm-activeLine': {background:'rgba(255,255,255,.02)'},
+      }, {dark:true}),
+      EditorView.updateListener.of(upd => {
+        if (upd.docChanged) {
+          setUnsaved(true);
+          updateStatus();
+        }
+      }),
+    ]
+  });
+}
+
+const view = new EditorView({
+  state: makeState(''),
+  parent: cmHost,
+});
+
+function getValue() { return view.state.doc.toString(); }
+function setValue(text) {
+  view.dispatch({
+    changes: {from:0, to:view.state.doc.length, insert:text}
+  });
+  view.dispatch({selection:{anchor:0}});
+}
+
+// --- Storage ---
+function loadSt() { try { files = JSON.parse(localStorage.getItem(SKEY)) || {}; } catch { files={}; } }
+function saveSt() { localStorage.setItem(SKEY, JSON.stringify(files)); }
+function setUnsaved(v) { unsaved=v; udot.classList.toggle('v',v); }
+function updateStatus() {
+  const v = getValue();
+  stC.textContent = v.length + ' 文字';
+  stL.textContent = view.state.doc.lines + ' 行';
+}
+
+// --- File ops ---
+function openFile(name) {
+  if (currentFile && unsaved) { files[currentFile] = getValue(); saveSt(); }
+  currentFile = name;
+  fnInput.value = name;
+  setValue(files[name] || '');
+  setUnsaved(false);
+  updateStatus();
+  renderList();
+  if (isPreview) renderPreview();
+}
+
+function newFile(name, content='') {
+  if (!name) return;
+  if (!name.endsWith('.md')) name += '.md';
+  files[name] = content;
+  saveSt();
+  openFile(name);
+}
+
+function saveFile() {
+  if (!currentFile) return;
+  let n = fnInput.value.trim() || 'untitled.md';
+  if (!n.endsWith('.md')) n += '.md';
+  fnInput.value = n;
+  if (n !== currentFile) { files[n] = getValue(); delete files[currentFile]; currentFile = n; }
+  else { files[currentFile] = getValue(); }
+  saveSt();
+  setUnsaved(false);
+  renderList();
+  if (dbxToken) saveToDropbox();
+}
+
+function deleteFile(name) {
+  if (!confirm('"'+name+'" を削除？')) return;
+  delete files[name];
+  saveSt();
+  const k = Object.keys(files);
+  k.length === 0 ? newFile('untitled.md','') : openFile(k[0]);
+}
+
+function renderList() {
+  fileListEl.innerHTML = '';
+  Object.keys(files).forEach(name => {
+    const el = document.createElement('div');
+    el.className = 'file-item' + (name === currentFile ? ' active' : '');
+    el.innerHTML = '<span style="overflow:hidden;text-overflow:ellipsis;flex:1">'+name+'</span><span class="file-del" data-n="'+name+'">×</span>';
+    el.addEventListener('click', e => {
+      if (e.target.classList.contains('file-del')) deleteFile(e.target.dataset.n);
+      else openFile(name);
+    });
+    fileListEl.appendChild(el);
+  });
+}
+
+// --- Preview ---
+marked.setOptions({breaks:true, gfm:true});
+function renderPreview() { previewEl.innerHTML = marked.parse(getValue()); }
+
+modeBtn.addEventListener('click', () => {
+  isPreview = !isPreview;
+  if (isPreview) {
+    renderPreview();
+    previewEl.classList.add('v');
+    cmHost.style.display = 'none';
+    modeBtn.textContent = 'preview';
+    stM.textContent = 'プレビュー';
+  } else {
+    previewEl.classList.remove('v');
+    cmHost.style.display = '';
+    view.focus();
+    modeBtn.textContent = 'edit';
+    stM.textContent = '編集';
+  }
+});
+
+saveBtn.addEventListener('click', saveFile);
+newBtn.addEventListener('click', () => { const n = prompt('ファイル名:','new.md'); if(n) newFile(n); });
+fnInput.addEventListener('input', () => setUnsaved(true));
+
+// --- Dropbox ---
+function checkDbx() {
+  const h = window.location.hash;
+  if (h.includes('access_token=')) {
+    const p = new URLSearchParams(h.substring(1));
+    dbxToken = p.get('access_token');
+    localStorage.setItem('mdapp_dbx_token', dbxToken);
+    window.location.hash = '';
+    onDbxConnected(); return;
+  }
+  const s = localStorage.getItem('mdapp_dbx_token');
+  if (s) { dbxToken = s; onDbxConnected(); }
+}
+function onDbxConnected() {
+  dbxBtn.textContent = 'Dropbox: 接続中';
+  dbxBtn.classList.add('connected');
+  loadDbxFiles();
+}
+function connectDbx() {
+  if (dbxToken) {
+    if (confirm('Dropbox接続を解除？')) {
+      dbxToken = null;
+      localStorage.removeItem('mdapp_dbx_token');
+      dbxBtn.textContent = 'Dropbox 接続';
+      dbxBtn.classList.remove('connected');
+      dbxFilesEl.innerHTML = '';
+    }
+    return;
+  }
+  if (!appKey) { modal.classList.add('v'); return; }
+  startDbxAuth();
+}
+function startDbxAuth() {
+  const u = location.href.split('#')[0];
+  location.href = 'https://www.dropbox.com/oauth2/authorize?client_id='+appKey+'&response_type=token&redirect_uri='+encodeURIComponent(u);
+}
+async function loadDbxFiles() {
+  if (!dbxToken) return;
+  try {
+    const r = await fetch('https://api.dropboxapi.com/2/files/list_folder',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/json'},
+      body:JSON.stringify({path:'',recursive:false})
+    });
+    const d = await r.json();
+    dbxFilesEl.innerHTML = '';
+    (d.entries||[]).filter(e=>e.name.endsWith('.md')).forEach(e=>{
+      const el = document.createElement('div');
+      el.className = 'dbx-file';
+      el.textContent = '↓ '+e.name;
+      el.onclick = ()=>loadDbxFile(e.path_lower, e.name);
+      dbxFilesEl.appendChild(el);
+    });
+  } catch(e){console.error(e);}
+}
+async function loadDbxFile(path, name) {
+  try {
+    const r = await fetch('https://content.dropboxapi.com/2/files/download',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+dbxToken,'Dropbox-API-Arg':JSON.stringify({path})}
+    });
+    const c = await r.text();
+    files[name]=c; saveSt(); openFile(name);
+  } catch { alert('読み込みエラー'); }
+}
+async function saveToDropbox() {
+  if (!dbxToken || !currentFile) return;
+  try {
+    await fetch('https://content.dropboxapi.com/2/files/upload',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/octet-stream','Dropbox-API-Arg':JSON.stringify({path:'/'+currentFile,mode:'overwrite'})},
+      body:getValue()
+    });
+  } catch(e){console.error(e);}
+}
+
+dbxBtn.addEventListener('click', connectDbx);
+document.getElementById('modal-cancel').addEventListener('click',()=>modal.classList.remove('v'));
+document.getElementById('modal-ok').addEventListener('click',()=>{
+  const k = akInput.value.trim();
+  if (!k) return;
+  appKey = k;
+  localStorage.setItem('mdapp_dbx_key',k);
+  modal.classList.remove('v');
+  startDbxAuth();
+});
+
+// --- Init ---
+loadSt();
+if (Object.keys(files).length===0) {
+  files['untitled.md']='# はじめに\n\nここに書く。\n\n## 見出し2\n\nテキスト、**太字**、*イタリック*。\n\n- リスト1\n- リスト2\n';
+  saveSt();
+}
+openFile(Object.keys(files)[0]);
+checkDbx();
+</script>
+</body>
+</html>
