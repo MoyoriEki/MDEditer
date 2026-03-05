@@ -35,16 +35,16 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 #sidebar{width:250px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .2s,opacity .2s}
 #sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
-#sidebar-top{padding:12px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+#sidebar-top{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px}
 #sidebar-top-label{font-size:9px;letter-spacing:.22em;color:var(--text-dim);text-transform:uppercase;flex:1}
-.icon-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:15px;padding:4px 6px;border-radius:2px;transition:color .15s,background .15s;line-height:1;font-family:'IBM Plex Mono',monospace}
+.icon-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:20px;padding:6px 10px;border-radius:2px;transition:color .15s,background .15s;line-height:1;font-family:'IBM Plex Mono',monospace}
 .icon-btn:hover{color:var(--accent);background:var(--bg3)}
 .icon-btn:active{opacity:.7}
 
 #file-tree{flex:1;overflow-y:auto;padding:4px 0}
 .tree-msg{padding:14px 16px;font-size:11px;color:var(--text-dim);line-height:1.6}
 
-.tree-row{display:flex;align-items:center;gap:5px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text-mid);transition:color .1s,background .1s;white-space:nowrap;overflow:hidden;user-select:none;border-left:2px solid transparent}
+.tree-row{display:flex;align-items:center;gap:5px;padding:10px 14px;font-size:14px;cursor:pointer;color:var(--text-mid);transition:color .1s,background .1s;white-space:nowrap;overflow:hidden;user-select:none;border-left:2px solid transparent}
 .tree-row:hover{color:var(--text);background:var(--bg3)}
 .tree-file.active{color:var(--accent);border-left-color:var(--accent)}
 .tree-arrow{font-size:8px;flex-shrink:0;transition:transform .15s;color:var(--text-dim);width:10px;display:inline-block}
@@ -64,22 +64,24 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 #dbx-connect-btn{width:100%;background:none;border:1px solid var(--border2);color:var(--text-mid);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;padding:8px;border-radius:2px;text-transform:uppercase;transition:all .15s}
 #dbx-connect-btn:hover{border-color:var(--accent);color:var(--accent)}
 #dbx-connect-btn.on{border-color:var(--accent-dim);color:var(--accent)}
+#settings-btn{width:100%;background:none;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em;padding:8px;border-radius:2px;text-transform:uppercase;transition:all .15s}
+#settings-btn:hover{border-color:var(--accent);color:var(--accent)}
 
 /* ── MAIN ── */
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
 #toolbar{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;flex-wrap:wrap}
-#toggle-sidebar{background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:18px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1}
+#toggle-sidebar{background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:22px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1}
 #toggle-sidebar:hover{color:var(--accent)}
-#filename-display{flex:1;font-size:13px;color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px}
+#filename-display{flex:1;font-size:14px;color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px}
 #filename-display b{color:var(--text);font-weight:400}
 #unsaved-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:none;flex-shrink:0}
 #unsaved-dot.v{display:block}
 
 .tbtn{
   background:none;border:1px solid var(--border2);color:var(--text-mid);
-  cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;
-  letter-spacing:.1em;padding:7px 14px;border-radius:2px;
+  cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:13px;
+  letter-spacing:.08em;padding:8px 16px;border-radius:2px;
   transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 }
 .tbtn:hover{border-color:var(--accent);color:var(--accent)}
@@ -149,15 +151,15 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   <!-- SIDEBAR -->
   <div id="sidebar">
     <div id="sidebar-top">
-      <span id="sidebar-top-label">dropbox</span>
-      <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル">+</button>
-      <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ">▫</button>
+      <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル">＋</button>
+      <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ">□</button>
       <button type="button" class="icon-btn" id="refresh-btn" title="更新">↻</button>
     </div>
     <div id="file-tree"><div class="tree-msg">接続してください</div></div>
     <div id="sidebar-bottom">
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
+      <button type="button" id="settings-btn">設定</button>
     </div>
   </div>
 
@@ -167,12 +169,11 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
       <button type="button" id="toggle-sidebar">☰</button>
       <div id="filename-display"><b>—</b></div>
       <div id="unsaved-dot"></div>
-      <button type="button" class="tbtn" id="undo-btn">↩ 取消</button>
-      <button type="button" class="tbtn" id="redo-btn">↪ やり直し</button>
+      <button type="button" class="tbtn" id="undo-btn" title="取り消し">↩</button>
+      <button type="button" class="tbtn" id="redo-btn" title="やり直し">↪</button>
       <button type="button" class="tbtn on" id="mode-btn">編集</button>
       <button type="button" class="tbtn" id="overwrite-btn">上書き</button>
       <button type="button" class="tbtn" id="export-btn">書き出し</button>
-      <button type="button" class="tbtn" id="settings-btn">設定</button>
     </div>
     <div id="editor-wrap">
       <div id="empty-state">Dropboxに接続してファイルを選択</div>
@@ -312,7 +313,7 @@ const previewEl     = document.getElementById('preview');
 const modeBtn       = document.getElementById('mode-btn');
 const overwriteBtn  = document.getElementById('overwrite-btn');
 const exportBtn     = document.getElementById('export-btn');
-const settingsBtn   = document.getElementById('settings-btn');
+
 const undoBtn     = document.getElementById('undo-btn');
 const redoBtn     = document.getElementById('redo-btn');
 const fnDisplay     = document.getElementById('filename-display');
@@ -531,6 +532,7 @@ async function openFile(path,name,row){
     setUnsaved(false); updateStatus(); stM.textContent='編集';
     if(activeRow) activeRow.classList.remove('active');
     activeRow=row; row.classList.add('active');
+    if(window.innerWidth<=768){sidebarOpen=false;sidebar.classList.add('collapsed');}
     if(!isPreview) view.focus();
     if(isPreview) renderPreview();
   }catch(e){alert('読み込みエラー: '+e.message);}
@@ -706,7 +708,7 @@ document.getElementById('dbx-modal-ok').addEventListener('click',()=>{
 });
 
 // settings
-settingsBtn.addEventListener('click',()=>{
+document.getElementById('settings-btn').addEventListener('click',()=>{
   document.getElementById('cfg-font').value=cfg.font;
   document.getElementById('cfg-preview-font').value=cfg.previewFont;
   document.getElementById('cfg-size').value=cfg.size;
