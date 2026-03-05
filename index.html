@@ -364,7 +364,7 @@ async function checkDbx() {
         dbxToken = d.access_token;
         localStorage.setItem('mdapp_dbx_token', dbxToken);
         localStorage.removeItem('mdapp_dbx_verifier');
-        history.replaceState({}, '', location.pathname);
+        window.history.replaceState({}, '', location.pathname);
         onDbxConnected();
       } else {
         console.error('token error', d);
