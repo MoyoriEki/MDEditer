@@ -150,29 +150,29 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
   <div id="sidebar">
     <div id="sidebar-top">
       <span id="sidebar-top-label">dropbox</span>
-      <button class="icon-btn" id="new-file-btn" title="新規ファイル">+</button>
-      <button class="icon-btn" id="new-folder-btn" title="新規フォルダ">▫</button>
-      <button class="icon-btn" id="refresh-btn" title="更新">↻</button>
+      <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル">+</button>
+      <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ">▫</button>
+      <button type="button" class="icon-btn" id="refresh-btn" title="更新">↻</button>
     </div>
     <div id="file-tree"><div class="tree-msg">接続してください</div></div>
     <div id="sidebar-bottom">
       <div id="dbx-status">未接続</div>
-      <button id="dbx-connect-btn">Dropbox 接続</button>
+      <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
     </div>
   </div>
 
   <!-- MAIN -->
   <div id="main">
     <div id="toolbar">
-      <button id="toggle-sidebar">☰</button>
+      <button type="button" id="toggle-sidebar">☰</button>
       <div id="filename-display"><b>—</b></div>
       <div id="unsaved-dot"></div>
-      <button class="tbtn" id="undo-btn">↩ 取消</button>
-      <button class="tbtn" id="redo-btn">↪ やり直し</button>
-      <button class="tbtn on" id="mode-btn">編集</button>
-      <button class="tbtn" id="overwrite-btn">上書き</button>
-      <button class="tbtn" id="export-btn">書き出し</button>
-      <button class="tbtn" id="settings-btn">設定</button>
+      <button type="button" class="tbtn" id="undo-btn">↩ 取消</button>
+      <button type="button" class="tbtn" id="redo-btn">↪ やり直し</button>
+      <button type="button" class="tbtn on" id="mode-btn">編集</button>
+      <button type="button" class="tbtn" id="overwrite-btn">上書き</button>
+      <button type="button" class="tbtn" id="export-btn">書き出し</button>
+      <button type="button" class="tbtn" id="settings-btn">設定</button>
     </div>
     <div id="editor-wrap">
       <div id="empty-state">Dropboxに接続してファイルを選択</div>
@@ -201,8 +201,8 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     <label>フォルダパス（例: /$md関連 ）空白でルート</label>
     <input id="dbxpath-input" type="text" placeholder="/$md関連">
     <div class="modal-actions">
-      <button id="dbx-modal-cancel">キャンセル</button>
-      <button id="dbx-modal-ok" class="primary">接続する</button>
+      <button type="button" id="dbx-modal-cancel">キャンセル</button>
+      <button type="button" id="dbx-modal-ok" class="primary">接続する</button>
     </div>
   </div>
 </div>
@@ -249,8 +249,8 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     <label>Dropboxフォルダパス</label>
     <input id="cfg-path" type="text" placeholder="/$md関連">
     <div class="modal-actions">
-      <button id="settings-cancel">キャンセル</button>
-      <button id="settings-ok" class="primary">適用</button>
+      <button type="button" id="settings-cancel">キャンセル</button>
+      <button type="button" id="settings-ok" class="primary">適用</button>
     </div>
   </div>
 </div>
@@ -262,8 +262,8 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     <label>ファイル名</label>
     <input id="newfile-input" type="text" placeholder="filename.md">
     <div class="modal-actions">
-      <button id="newfile-cancel">キャンセル</button>
-      <button id="newfile-ok" class="primary">作成</button>
+      <button type="button" id="newfile-cancel">キャンセル</button>
+      <button type="button" id="newfile-ok" class="primary">作成</button>
     </div>
   </div>
 </div>
@@ -275,8 +275,8 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
     <label>フォルダ名</label>
     <input id="newfolder-input" type="text" placeholder="folder-name">
     <div class="modal-actions">
-      <button id="newfolder-cancel">キャンセル</button>
-      <button id="newfolder-ok" class="primary">作成</button>
+      <button type="button" id="newfolder-cancel">キャンセル</button>
+      <button type="button" id="newfolder-ok" class="primary">作成</button>
     </div>
   </div>
 </div>
@@ -389,4 +389,356 @@ function setValue(text){
 function applyTheme(dark){
   isDark=dark;
   document.documentElement.dataset.theme=dark?'dark':'light';
-  if(view&&currentPath
+  if(view&&currentPath){const d=getValue();buildEditor(d);}
+}
+
+// ── sidebar ──
+let sidebarOpen=window.innerWidth>768;
+if(!sidebarOpen) sidebar.classList.add('collapsed');
+document.getElementById('toggle-sidebar').addEventListener('click',()=>{
+  sidebarOpen=!sidebarOpen;
+  sidebar.classList.toggle('collapsed',!sidebarOpen);
+});
+
+// ── helpers ──
+function setUnsaved(v){unsaved=v;udot.classList.toggle('v',v);}
+function updateStatus(){
+  if(!view)return;
+  stC.textContent=getValue().length+' 文字';
+  stL.textContent=view.state.doc.lines+' 行';
+}
+function flashBtn(btn){
+  btn.classList.add('flash');
+  setTimeout(()=>btn.classList.remove('flash'),400);
+}
+
+// ── Dropbox API ──
+function dbxArg(obj){
+  return JSON.stringify(obj).replace(/[\u0080-\uFFFF]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
+}
+async function dbxFetch(endpoint,body){
+  const r=await fetch('https://api.dropboxapi.com/2/'+endpoint,{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/json'},
+    body:JSON.stringify(body),
+  });
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function dbxDownload(path){
+  const r=await fetch('https://content.dropboxapi.com/2/files/download',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+dbxToken,'Dropbox-API-Arg':dbxArg({path})},
+  });
+  if(!r.ok) throw new Error(await r.text());
+  return r.text();
+}
+async function dbxUpload(path,content){
+  const r=await fetch('https://content.dropboxapi.com/2/files/upload',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/octet-stream','Dropbox-API-Arg':dbxArg({path,mode:'overwrite',autorename:false})},
+    body:content,
+  });
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function dbxCreateFolder(path){
+  return dbxFetch('files/create_folder_v2',{path,autorename:false});
+}
+async function dbxDelete(path){
+  return dbxFetch('files/delete_v2',{path});
+}
+
+// ── tree ──
+async function loadTree(containerEl, folderPath){
+  containerEl.innerHTML='<div class="tree-msg">読み込み中...</div>';
+  try{
+    let entries=[], cursor=null, hasMore=true;
+    while(hasMore){
+      let d;
+      if(!cursor) d=await dbxFetch('files/list_folder',{path:folderPath,recursive:false,include_non_downloadable_files:false});
+      else d=await dbxFetch('files/list_folder/continue',{cursor});
+      entries=[...entries,...d.entries];
+      cursor=d.cursor; hasMore=d.has_more;
+    }
+    renderEntries(containerEl, entries, folderPath);
+  }catch(e){
+    containerEl.innerHTML='<div class="tree-msg" style="color:var(--danger)">エラー: '+e.message+'</div>';
+  }
+}
+
+function renderEntries(containerEl, entries, parentPath){
+  containerEl.innerHTML='';
+  const folders=entries.filter(e=>e['.tag']==='folder').sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  const files=entries.filter(e=>e['.tag']==='file'&&(e.name.endsWith('.md')||e.name.endsWith('.txt'))).sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+
+  if(folders.length===0&&files.length===0){
+    containerEl.innerHTML='<div class="tree-msg">ファイルなし</div>';
+    return;
+  }
+
+  for(const folder of folders){
+    const row=document.createElement('div');
+    row.className='tree-row tree-folder';
+    const arrow=document.createElement('span'); arrow.className='tree-arrow'; arrow.textContent='▶';
+    const icon=document.createElement('span'); icon.className='tree-icon'; icon.textContent='▫';
+    const label=document.createElement('span'); label.className='tree-name'; label.textContent=folder.name;
+    const actions=document.createElement('span'); actions.className='tree-actions';
+    const delBtn=document.createElement('button'); delBtn.className='tree-act-btn'; delBtn.textContent='×'; delBtn.title='削除';
+    delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+folder.name+'" を削除しますか？（中身ごと削除されます）')){try{await dbxDelete(folder.path_display);row.remove();children.remove();}catch(e){alert('エラー: '+e.message);}}};
+    actions.append(delBtn);
+    row.append(arrow,icon,label,actions);
+
+    const children=document.createElement('div');
+    children.className='tree-children';
+    let loaded=false;
+
+    row.addEventListener('click',async()=>{
+      currentFolder=folder.path_display;
+      const open=children.classList.toggle('open');
+      arrow.classList.toggle('open',open);
+      if(open&&!loaded){loaded=true;await loadTree(children,folder.path_display);}
+    });
+    containerEl.append(row,children);
+  }
+
+  for(const file of files){
+    const row=document.createElement('div');
+    row.className='tree-row tree-file';
+    const icon=document.createElement('span'); icon.className='tree-icon'; icon.textContent='·';
+    const label=document.createElement('span'); label.className='tree-name'; label.textContent=file.name;
+    const actions=document.createElement('span'); actions.className='tree-actions';
+    const delBtn=document.createElement('button'); delBtn.className='tree-act-btn'; delBtn.textContent='×'; delBtn.title='削除';
+    delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+file.name+'" を削除しますか？')){try{await dbxDelete(file.path_display);if(currentPath===file.path_display){currentPath=null;fnDisplay.innerHTML='<b>—</b>';cmHost.style.display='none';emptyState.classList.remove('hidden');}row.remove();}catch(e){alert('エラー: '+e.message);}}};
+    actions.append(delBtn);
+    row.append(icon,label,actions);
+    row.addEventListener('click',()=>openFile(file.path_display,file.name,row));
+    containerEl.append(row);
+  }
+}
+
+// ── file ops ──
+let activeRow=null;
+async function openFile(path,name,row){
+  if(unsaved&&!confirm('保存されていない変更があります。続けますか？'))return;
+  try{
+    const text=await dbxDownload(path);
+    currentPath=path;
+    fnDisplay.innerHTML='<b>'+name+'</b>';
+    emptyState.classList.add('hidden');
+    cmHost.style.display='';
+    if(!view) buildEditor(text); else setValue(text);
+    setUnsaved(false); updateStatus(); stM.textContent='編集';
+    if(activeRow) activeRow.classList.remove('active');
+    activeRow=row; row.classList.add('active');
+    if(!isPreview) view.focus();
+    if(isPreview) renderPreview();
+  }catch(e){alert('読み込みエラー: '+e.message);}
+}
+
+async function saveOverwrite(){
+  if(!currentPath||!view)return;
+  try{
+    await dbxUpload(currentPath,getValue());
+    setUnsaved(false);
+    flashBtn(overwriteBtn);
+  }catch(e){alert('保存エラー: '+e.message);}
+}
+
+function exportFile(){
+  if(!view)return;
+  const name=currentPath?currentPath.split('/').pop():'export.md';
+  const blob=new Blob([getValue()],{type:'text/markdown'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  a.click();
+  flashBtn(exportBtn);
+}
+
+// 新規ファイル作成
+async function createNewFile(name){
+  if(!dbxToken)return;
+  if(!name.endsWith('.md')&&!name.endsWith('.txt')) name+='.md';
+  const folder=currentFolder||dbxPath||'';
+  const path=(folder?folder:'')+(folder.endsWith('/')?'':'/') +name;
+  try{
+    await dbxUpload(path,'');
+    await loadTree(fileTree,dbxPath||'');
+  }catch(e){alert('作成エラー: '+e.message);}
+}
+
+// 新規フォルダ作成
+async function createNewFolder(name){
+  if(!dbxToken)return;
+  const folder=currentFolder||dbxPath||'';
+  const path=(folder?folder:'')+(folder.endsWith('/')?'':'/')+name;
+  try{
+    await dbxCreateFolder(path);
+    await loadTree(fileTree,dbxPath||'');
+  }catch(e){alert('作成エラー: '+e.message);}
+}
+
+// ── preview ──
+marked.setOptions({breaks:true,gfm:true});
+function renderPreview(){previewEl.innerHTML=marked.parse(getValue());}
+modeBtn.addEventListener('click',()=>{
+  if(!currentPath)return;
+  isPreview=!isPreview;
+  if(isPreview){
+    renderPreview(); previewEl.classList.add('v');
+    cmHost.style.display='none';
+    modeBtn.textContent='編集'; stM.textContent='プレビュー';
+  }else{
+    previewEl.classList.remove('v'); cmHost.style.display='';
+    modeBtn.textContent='プレビュー'; stM.textContent='編集'; view.focus();
+  }
+  modeBtn.classList.toggle('on',!isPreview);
+});
+
+// ── PKCE ──
+function b64url(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+async function genPKCE(){
+  const v=b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));
+  return{verifier:v,challenge:b64url(d)};
+}
+async function checkAuth(){
+  const params=new URLSearchParams(location.search);
+  const code=params.get('code');
+  if(code){
+    const verifier=localStorage.getItem('mdapp_dbx_verifier');
+    const ak=localStorage.getItem('mdapp_dbx_key');
+    try{
+      const r=await fetch('https://api.dropboxapi.com/oauth2/token',{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:new URLSearchParams({code,grant_type:'authorization_code',client_id:ak,code_verifier:verifier,redirect_uri:location.origin+location.pathname}),
+      });
+      const d=await r.json();
+      if(d.access_token){
+        dbxToken=d.access_token;
+        localStorage.setItem('mdapp_dbx_token',dbxToken);
+        localStorage.removeItem('mdapp_dbx_verifier');
+        window.history.replaceState({},'',location.pathname);
+        onConnected();
+      }
+    }catch(e){console.error(e);}
+    return;
+  }
+  const t=localStorage.getItem('mdapp_dbx_token');
+  if(t){dbxToken=t;onConnected();}
+}
+function onConnected(){
+  dbxStatus.textContent='接続中'; dbxStatus.classList.add('on');
+  dbxConnectBtn.textContent='切断'; dbxConnectBtn.classList.add('on');
+  loadTree(fileTree,dbxPath||'');
+}
+async function startAuth(){
+  const{verifier,challenge}=await genPKCE();
+  localStorage.setItem('mdapp_dbx_verifier',verifier);
+  location.href='https://www.dropbox.com/oauth2/authorize?'+new URLSearchParams({
+    client_id:appKey,response_type:'code',
+    code_challenge:challenge,code_challenge_method:'S256',
+    redirect_uri:location.origin+location.pathname,token_access_type:'offline',
+  });
+}
+
+// ── events ──
+undoBtn.addEventListener('click',()=>{if(view)undo(view);});
+redoBtn.addEventListener('click',()=>{if(view)redo(view);});
+overwriteBtn.addEventListener('click',saveOverwrite);
+exportBtn.addEventListener('click',exportFile);
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='s'){e.preventDefault();saveOverwrite();}});
+
+document.getElementById('refresh-btn').addEventListener('click',()=>{if(dbxToken)loadTree(fileTree,dbxPath||'');});
+
+document.getElementById('new-file-btn').addEventListener('click',()=>{
+  if(!dbxToken){alert('先に接続してください');return;}
+  document.getElementById('newfile-input').value='';
+  newfileModal.classList.add('v');
+  setTimeout(()=>document.getElementById('newfile-input').focus(),50);
+});
+document.getElementById('newfile-cancel').addEventListener('click',()=>newfileModal.classList.remove('v'));
+document.getElementById('newfile-ok').addEventListener('click',async()=>{
+  const n=document.getElementById('newfile-input').value.trim();
+  if(!n)return;
+  newfileModal.classList.remove('v');
+  await createNewFile(n);
+});
+document.getElementById('newfile-input').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('newfile-ok').click();});
+
+document.getElementById('new-folder-btn').addEventListener('click',()=>{
+  if(!dbxToken){alert('先に接続してください');return;}
+  document.getElementById('newfolder-input').value='';
+  newfolderModal.classList.add('v');
+  setTimeout(()=>document.getElementById('newfolder-input').focus(),50);
+});
+document.getElementById('newfolder-cancel').addEventListener('click',()=>newfolderModal.classList.remove('v'));
+document.getElementById('newfolder-ok').addEventListener('click',async()=>{
+  const n=document.getElementById('newfolder-input').value.trim();
+  if(!n)return;
+  newfolderModal.classList.remove('v');
+  await createNewFolder(n);
+});
+document.getElementById('newfolder-input').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('newfolder-ok').click();});
+
+dbxConnectBtn.addEventListener('click',()=>{
+  if(dbxToken){
+    if(!confirm('Dropbox接続を解除しますか？'))return;
+    dbxToken=null;
+    localStorage.removeItem('mdapp_dbx_token');
+    dbxStatus.textContent='未接続'; dbxStatus.classList.remove('on');
+    dbxConnectBtn.textContent='Dropbox 接続'; dbxConnectBtn.classList.remove('on');
+    fileTree.innerHTML='<div class="tree-msg">接続してください</div>';
+    return;
+  }
+  if(!appKey){akInput.value=appKey;dpInput.value=dbxPath;dbxModal.classList.add('v');return;}
+  startAuth();
+});
+document.getElementById('dbx-modal-cancel').addEventListener('click',()=>dbxModal.classList.remove('v'));
+document.getElementById('dbx-modal-ok').addEventListener('click',()=>{
+  const k=akInput.value.trim(); if(!k)return;
+  appKey=k; localStorage.setItem('mdapp_dbx_key',k);
+  dbxPath=dpInput.value.trim(); localStorage.setItem('mdapp_dbx_path',dbxPath);
+  dbxModal.classList.remove('v');
+  startAuth();
+});
+
+// settings
+settingsBtn.addEventListener('click',()=>{
+  document.getElementById('cfg-font').value=cfg.font;
+  document.getElementById('cfg-preview-font').value=cfg.previewFont;
+  document.getElementById('cfg-size').value=cfg.size;
+  document.getElementById('cfg-lh').value=cfg.lh;
+  document.getElementById('cfg-theme').value=cfg.theme||'dark';
+  document.getElementById('cfg-path').value=dbxPath;
+  settingsModal.classList.add('v');
+});
+document.getElementById('settings-cancel').addEventListener('click',()=>settingsModal.classList.remove('v'));
+document.getElementById('settings-ok').addEventListener('click',()=>{
+  cfg.font=document.getElementById('cfg-font').value;
+  cfg.previewFont=document.getElementById('cfg-preview-font').value;
+  cfg.size=parseInt(document.getElementById('cfg-size').value);
+  cfg.lh=parseFloat(document.getElementById('cfg-lh').value);
+  cfg.theme=document.getElementById('cfg-theme').value;
+  localStorage.setItem('mdapp_cfg',JSON.stringify(cfg));
+  applyTheme(cfg.theme==='dark');
+  const newPath=document.getElementById('cfg-path').value.trim();
+  if(newPath!==dbxPath){
+    dbxPath=newPath;
+    localStorage.setItem('mdapp_dbx_path',dbxPath);
+    if(dbxToken) loadTree(fileTree,dbxPath||'');
+  }
+  applyFontCfg();
+  if(view&&currentPath){const d=getValue();buildEditor(d);}
+  settingsModal.classList.remove('v');
+});
+
+// ── init ──
+applyTheme(cfg.theme!=='light');
+buildEditor('');
+checkAuth();
+</script>
+</body>
+</html>
