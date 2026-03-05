@@ -329,15 +329,48 @@ saveBtn.addEventListener('click', saveFile);
 newBtn.addEventListener('click', () => { const n = prompt('ファイル名:','new.md'); if(n) newFile(n); });
 fnInput.addEventListener('input', () => setUnsaved(true));
 
-// --- Dropbox ---
-function checkDbx() {
-  const h = window.location.hash;
-  if (h.includes('access_token=')) {
-    const p = new URLSearchParams(h.substring(1));
-    dbxToken = p.get('access_token');
-    localStorage.setItem('mdapp_dbx_token', dbxToken);
-    window.location.hash = '';
-    onDbxConnected(); return;
+// --- Dropbox PKCE ---
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function genPKCE() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return { verifier, challenge: b64url(digest) };
+}
+
+async function checkDbx() {
+  // PKCEコールバック
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  if (code) {
+    const verifier = localStorage.getItem('mdapp_dbx_verifier');
+    const ak = localStorage.getItem('mdapp_dbx_key');
+    const redirectUri = location.origin + location.pathname;
+    try {
+      const r = await fetch('https://api.dropboxapi.com/oauth2/token', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({
+          code, grant_type:'authorization_code',
+          client_id: ak,
+          code_verifier: verifier,
+          redirect_uri: redirectUri,
+        })
+      });
+      const d = await r.json();
+      if (d.access_token) {
+        dbxToken = d.access_token;
+        localStorage.setItem('mdapp_dbx_token', dbxToken);
+        localStorage.removeItem('mdapp_dbx_verifier');
+        history.replaceState({}, '', location.pathname);
+        onDbxConnected();
+      } else {
+        console.error('token error', d);
+      }
+    } catch(e) { console.error(e); }
+    return;
   }
   const s = localStorage.getItem('mdapp_dbx_token');
   if (s) { dbxToken = s; onDbxConnected(); }
@@ -361,9 +394,19 @@ function connectDbx() {
   if (!appKey) { modal.classList.add('v'); return; }
   startDbxAuth();
 }
-function startDbxAuth() {
-  const u = location.href.split('#')[0];
-  location.href = 'https://www.dropbox.com/oauth2/authorize?client_id='+appKey+'&response_type=token&redirect_uri='+encodeURIComponent(u);
+async function startDbxAuth() {
+  const {verifier, challenge} = await genPKCE();
+  localStorage.setItem('mdapp_dbx_verifier', verifier);
+  const redirectUri = location.origin + location.pathname;
+  const url = 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams({
+    client_id: appKey,
+    response_type: 'code',
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    redirect_uri: redirectUri,
+    token_access_type: 'offline',
+  });
+  location.href = url;
 }
 async function loadDbxFiles() {
   if (!dbxToken) return;
