@@ -512,47 +512,39 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-const autoReplaceTxn = Annotation.define();
-
-const autoReplace = EditorView.updateListener.of(u=>{
-  if(!u.docChanged) return;
-  if(u.transactions.some(tr=>tr.annotation(autoReplaceTxn))) return;
-  if(u.view.composing) return; // IME変換中は触らない
-
-  const sel = u.state.selection.main;
-  if(!sel.empty) return;
-
-  const pos = sel.head;
-  const line = u.state.doc.lineAt(pos);
-  const text = line.text;
-
-  let change = null;
-  let cursor = null;
-
-  if(text === '・'){
-    change = {from: line.from, to: line.to, insert: '- '};
-    cursor = line.from + 2;
-  }else if(text === '＃ '){
-    change = {from: line.from, to: line.to, insert: '# '};
-    cursor = line.from + 2;
-  }else if(text === '＃＃ '){
-    change = {from: line.from, to: line.to, insert: '## '};
-    cursor = line.from + 3;
-  }else if(text === '＃＃＃ '){
-    change = {from: line.from, to: line.to, insert: '### '};
-    cursor = line.from + 4;
-  }else if(text === '＞ '){
-    change = {from: line.from, to: line.to, insert: '> '};
-    cursor = line.from + 2;
+// Direct DOM events — bypasses all CM6 composition timing issues
+function tryAutoReplace(){
+  if(!view)return;
+  const st=view.state;
+  const pos=st.selection.main.head;
+  const line=st.doc.lineAt(pos);
+  const lt=line.text;
+  const rules=[
+    {find:'・',  replace:'- ',  matchFn:t=>t.startsWith('・')},
+    {find:'＃ ',  replace:'# ',  matchFn:t=>t==='＃ '},
+    {find:'＃＃ ', replace:'## ', matchFn:t=>t==='＃＃ '},
+    {find:'＃＃＃ ',replace:'### ',matchFn:t=>t==='＃＃＃ '},
+    {find:'＞ ',  replace:'> ',  matchFn:t=>t==='＞ '},
+  ];
+  for(const r of rules){
+    if(r.matchFn(lt)){
+      view.dispatch({changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
+        selection:{anchor:line.from+r.replace.length}});
+      return;
+    }
   }
-
-  if(!change) return;
-
-  u.view.dispatch({
-    changes: change,
-    selection: {anchor: cursor},
-    annotations: autoReplaceTxn.of(true)
-  });
+}
+// compositionend fires AFTER IME confirms
+let _arTimer=0;
+function scheduleAutoReplace(ms){
+  clearTimeout(_arTimer);
+  _arTimer=setTimeout(tryAutoReplace,ms);
+}
+cmHost.addEventListener('compositionend',()=>scheduleAutoReplace(30));
+cmHost.addEventListener('input',()=>scheduleAutoReplace(10));
+// keep as CM6 extension too (belt and suspenders)
+const autoReplace=EditorView.domEventHandlers({
+  compositionend(){scheduleAutoReplace(30);}
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
