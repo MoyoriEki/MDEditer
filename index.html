@@ -9,11 +9,16 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="md">
 <meta name="theme-color" content="#0e0e0e">
+<link rel="preload" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<link rel="preload" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;1,300&family=IBM+Plex+Sans:wght@300;400&family=Spectral:ital,wght@0,300;0,400;1,300&family=Noto+Serif+JP:wght@300;400&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;1,300&family=IBM+Plex+Sans:wght@300;400&family=Spectral:ital,wght@0,300;0,400;1,300&family=Noto+Serif+JP:wght@300;400&display=swap">
+</noscript>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;1,300&family=IBM+Plex+Sans:wght@300;400&family=Spectral:ital,wght@0,300;0,400;1,300&family=Noto+Serif+JP:wght@300;400&display=swap');
+/* fonts loaded async via link preload below */
 
 [data-theme="dark"]{
   --bg:#0e0e0e;--bg2:#141414;--bg3:#1c1c1c;--bg4:#222;
@@ -29,14 +34,14 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{background:var(--bg);height:100%;height:100dvh;overflow:hidden}
-body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;transition:background .2s,color .2s}
+body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column}
 #app{display:flex;flex:1;overflow:hidden;padding-bottom:env(safe-area-inset-bottom,0)}
 
 /* ── SIDEBAR ── */
-#sidebar{width:250px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .2s,opacity .2s}
+#sidebar{width:250px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .15s,opacity .15s}
 #sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
-#sidebar-top{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px}
+#sidebar-top{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px;justify-content:flex-start}
 #sidebar-top-label{font-size:9px;letter-spacing:.22em;color:var(--text-dim);text-transform:uppercase;flex:1}
 .icon-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:20px;padding:6px 10px;border-radius:2px;transition:color .15s,background .15s;line-height:1;display:flex;align-items:center}
 .icon-btn:hover{color:var(--accent);background:var(--bg3)}
@@ -185,7 +190,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v20</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v21</div>
     </div>
   </div>
 
@@ -399,7 +404,7 @@ function buildEditor(doc=''){
   view=new EditorView({
     state:EditorState.create({doc,extensions:[
       history(),
-      keymap.of([...defaultKeymap,...historyKeymap,{key:'Mod-s',run(){saveOverwrite();return true;}}]),
+      keymap.of([{key:'Backspace',run:smartBackspace},...defaultKeymap,...historyKeymap,{key:'Mod-s',run(){saveOverwrite();return true;}}]),
       markdown(),
       hlComp.of(syntaxHighlighting(makeHL(isDark))),
       themeComp.of(makeTheme(isDark)),
@@ -432,65 +437,65 @@ const headingLine={
 const bqLine=Decoration.line({class:'cm-md-bq'});
 
 const liveMarkdown=ViewPlugin.fromClass(class{
-  constructor(v){this.decorations=this.build(v);}
-  update(u){if(u.docChanged||u.viewportChanged||u.selectionSet)this.decorations=this.build(u.view);}
+  constructor(v){this._curLine=-1;this.decorations=this.build(v);}
+  update(u){
+    if(!u.docChanged&&!u.viewportChanged){
+      // only cursor moved — check if line changed
+      const newLine=u.state.doc.lineAt(u.state.selection.main.head).number;
+      if(newLine===this._curLine) return; // same line, skip rebuild
+    }
+    this.decorations=this.build(u.view);
+  }
   build(v){
     const st=v.state;
     const sel=st.selection.main.head;
     const curLine=st.doc.lineAt(sel).number;
+    this._curLine=curLine;
     const decos=[];
     const lineDecos=[];
     const {from:vFrom,to:vTo}=v.viewport;
+    const lineCache=new Map();
+    const getLine=(pos)=>{
+      let l=lineCache.get(pos);
+      if(!l){l=st.doc.lineAt(pos);lineCache.set(pos,l);lineCache.set(l.from,l);}
+      return l;
+    };
     syntaxTree(st).iterate({from:vFrom,to:vTo,enter(node){
-      const nf=node.from,nt=node.to;
-      const line=st.doc.lineAt(nf).number;
-      const onCursor=line===curLine;
-      const nm=node.name;
-      // headings
+      const nf=node.from,nt=node.to,nm=node.name;
+      const line=getLine(nf);
+      const onCursor=line.number===curLine;
       if(nm.startsWith('ATXHeading')&&headingLine[nm]&&!onCursor){
-        lineDecos.push(headingLine[nm].range(st.doc.lineAt(nf).from));
+        lineDecos.push(headingLine[nm].range(line.from));
       }
-      // dim # marks
-      if(nm==='HeaderMark'&&!onCursor){
-        // dim mark + trailing space
-        const end=Math.min(nt+1,st.doc.lineAt(nf).to);
-        decos.push(dimMark.range(nf,end));
+      else if(nm==='HeaderMark'&&!onCursor){
+        decos.push(dimMark.range(nf,Math.min(nt+1,line.to)));
       }
-      // bold/italic markers
-      if(nm==='EmphasisMark'&&!onCursor){
+      else if(nm==='EmphasisMark'&&!onCursor){
         decos.push(dimMark.range(nf,nt));
       }
-      // inline code
-      if(nm==='InlineCode'&&!onCursor){
+      else if(nm==='InlineCode'&&!onCursor){
         decos.push(codeBg.range(nf,nt));
       }
-      if(nm==='CodeMark'&&!onCursor){
+      else if(nm==='CodeMark'&&!onCursor){
         decos.push(dimMark.range(nf,nt));
       }
-      // blockquote
-      if(nm==='Blockquote'){
-        // apply to each line in the blockquote
+      else if(nm==='Blockquote'){
         for(let pos=nf;pos<=nt;){
-          const l=st.doc.lineAt(pos);
+          const l=getLine(pos);
           if(l.number!==curLine) lineDecos.push(bqLine.range(l.from));
           pos=l.to+1;
         }
       }
-      // quote marks (>)
-      if(nm==='QuoteMark'&&!onCursor){
-        const end=Math.min(nt+1,st.doc.lineAt(nf).to);
-        decos.push(dimMark.range(nf,end));
+      else if(nm==='QuoteMark'&&!onCursor){
+        decos.push(dimMark.range(nf,Math.min(nt+1,line.to)));
       }
-      // link brackets
-      if(nm==='LinkMark'&&!onCursor){
+      else if(nm==='LinkMark'&&!onCursor){
         decos.push(dimMark.range(nf,nt));
       }
-      // URL in links
-      if(nm==='URL'&&!onCursor){
+      else if(nm==='URL'&&!onCursor){
         decos.push(dimMark.range(nf,nt));
       }
-      // horizontal rule
-      if(nm==='HorizontalRule'&&!onCursor){
+      else if(nm==='HorizontalRule'&&!onCursor){
         decos.push(hrMark.range(nf,nt));
       }
     }});
@@ -498,26 +503,47 @@ const liveMarkdown=ViewPlugin.fromClass(class{
   }
 },{decorations:v=>v.decorations});
 
-// ── auto-replace (・→ - ) ──
-const autoReplace=EditorView.inputHandler.of((view,from,to,text)=>{
-  const line=view.state.doc.lineAt(from);
-  const before=view.state.sliceDoc(line.from,from)+text;
-  const replacements=[
-    {pattern:/^・$/,  replace:'- '},
-    {pattern:/^＃ $/,  replace:'# '},
-    {pattern:/^＃＃ $/, replace:'## '},
-    {pattern:/^＃＃＃ $/,replace:'### '},
-    {pattern:/^＞ $/,  replace:'> '},
-  ];
-  for(const r of replacements){
-    if(r.pattern.test(before)){
-      view.dispatch({changes:{from:line.from,to,insert:r.replace},
+// ── auto-replace (・→ - ) post-hoc for reliable iOS IME ──
+const autoReplaceRules=[
+  {find:'・',  replace:'- '},
+  {find:'＃ ',  replace:'# '},
+  {find:'＃＃ ', replace:'## '},
+  {find:'＃＃＃ ',replace:'### '},
+  {find:'＞ ',  replace:'> '},
+];
+let _arLock=false;
+const autoReplace=EditorView.updateListener.of(u=>{
+  if(!u.docChanged||_arLock)return;
+  const st=u.state;
+  const pos=st.selection.main.head;
+  const line=st.doc.lineAt(pos);
+  for(const r of autoReplaceRules){
+    if(line.text===r.find||(line.text.startsWith(r.find)&&pos===line.from+r.find.length)){
+      _arLock=true;
+      u.view.dispatch({changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
         selection:{anchor:line.from+r.replace.length}});
+      _arLock=false;
+      return;
+    }
+  }
+});
+
+// ── smart backspace: delete "- " / "> " / "# " as a unit at line start ──
+function smartBackspace(v){
+  const sel=v.state.selection.main;
+  if(!sel.empty) return false;
+  const line=v.state.doc.lineAt(sel.head);
+  const offset=sel.head-line.from;
+  const lineText=line.text;
+  const prefixes=['- ','> ','# ','## ','### ','#### '];
+  for(const p of prefixes){
+    if(offset===p.length&&lineText.startsWith(p)){
+      v.dispatch({changes:{from:line.from,to:line.from+p.length}});
       return true;
     }
   }
   return false;
-});
+}
 function getValue(){return view?view.state.doc.toString():'';}
 function setValue(text){
   if(!view)return;
