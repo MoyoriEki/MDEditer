@@ -189,7 +189,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v28</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v29</div>
     </div>
   </div>
 
@@ -318,7 +318,7 @@ import {EditorView,keymap,ViewPlugin,Decoration} from 'https://esm.sh/@codemirro
 import {EditorState,Compartment,Prec} from 'https://esm.sh/@codemirror/state@6';
 import {markdown} from 'https://esm.sh/@codemirror/lang-markdown@6';
 import {defaultKeymap,historyKeymap,history,undo,redo} from 'https://esm.sh/@codemirror/commands@6';
-import {syntaxHighlighting,HighlightStyle,syntaxTree} from 'https://esm.sh/@codemirror/language@6';
+import {syntaxHighlighting,HighlightStyle,syntaxTree,ensureSyntaxTree} from 'https://esm.sh/@codemirror/language@6';
 import {tags} from 'https://esm.sh/@lezer/highlight@1';
 
 // ── state ──
@@ -443,9 +443,8 @@ const liveMarkdown=ViewPlugin.fromClass(class{
   constructor(v){this._curLine=-1;this.decorations=this.build(v);}
   update(u){
     if(!u.docChanged&&!u.viewportChanged){
-      // only cursor moved — check if line changed
       const newLine=u.state.doc.lineAt(u.state.selection.main.head).number;
-      if(newLine===this._curLine) return; // same line, skip rebuild
+      if(newLine===this._curLine) return;
     }
     this.decorations=this.build(u.view);
   }
@@ -457,6 +456,8 @@ const liveMarkdown=ViewPlugin.fromClass(class{
     const decos=[];
     const lineDecos=[];
     const {from:vFrom,to:vTo}=v.viewport;
+    // force full parse for viewport to avoid stale tree
+    ensureSyntaxTree(st,vTo,50);
     const lineCache=new Map();
     const getLine=(pos)=>{
       let l=lineCache.get(pos);
@@ -465,16 +466,18 @@ const liveMarkdown=ViewPlugin.fromClass(class{
     };
     syntaxTree(st).iterate({from:vFrom,to:vTo,enter(node){
       const nf=node.from,nt=node.to,nm=node.name;
+      if(nf>st.doc.length)return false; // safety
       const line=getLine(nf);
       const onCursor=line.number===curLine;
       if(nm.startsWith('ATXHeading')&&headingLine[nm]&&!onCursor){
-        // verify line actually starts with # (syntax tree can be stale)
         if(line.text.trimStart().startsWith('#')){
           lineDecos.push(headingLine[nm].range(line.from));
         }
       }
       else if(nm==='HeaderMark'&&!onCursor){
-        decos.push(dimMark.range(nf,Math.min(nt+1,line.to)));
+        if(st.sliceDoc(nf,nf+1)==='#'){
+          decos.push(dimMark.range(nf,Math.min(nt+1,line.to)));
+        }
       }
       else if(nm==='EmphasisMark'&&!onCursor){
         decos.push(dimMark.range(nf,nt));
@@ -510,40 +513,34 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-// setTimeout(0) runs after IME composition ends (unlike queueMicrotask which runs before)
-const autoReplace=EditorView.updateListener.of(u=>{
-  if(!u.docChanged)return;
-  const st=u.state;
+// Direct DOM events — bypasses all CM6 composition timing issues
+function tryAutoReplace(){
+  if(!view)return;
+  const st=view.state;
   const pos=st.selection.main.head;
   const line=st.doc.lineAt(pos);
   const lt=line.text;
-  if(lt.startsWith('・')){
-    setTimeout(()=>{
-      if(!view||view.composing)return;
-      const cur=view.state.doc.lineAt(view.state.selection.main.head);
-      if(!cur.text.startsWith('・'))return;
-      view.dispatch({changes:{from:cur.from,to:cur.from+1,insert:'- '},
-        selection:{anchor:cur.from+2}});
-    },0);
-    return;
-  }
-  const fwRules=[
-    {find:'＃ ',  replace:'# '},
-    {find:'＃＃ ', replace:'## '},
-    {find:'＃＃＃ ',replace:'### '},
-    {find:'＞ ',  replace:'> '},
+  const rules=[
+    {find:'・',  replace:'- ',  matchFn:t=>t.startsWith('・')},
+    {find:'＃ ',  replace:'# ',  matchFn:t=>t==='＃ '},
+    {find:'＃＃ ', replace:'## ', matchFn:t=>t==='＃＃ '},
+    {find:'＃＃＃ ',replace:'### ',matchFn:t=>t==='＃＃＃ '},
+    {find:'＞ ',  replace:'> ',  matchFn:t=>t==='＞ '},
   ];
-  for(const r of fwRules){
-    if(lt===r.find){
-      setTimeout(()=>{
-        if(!view||view.composing)return;
-        const cur=view.state.doc.lineAt(view.state.selection.main.head);
-        if(cur.text!==r.find)return;
-        view.dispatch({changes:{from:cur.from,to:cur.from+r.find.length,insert:r.replace},
-          selection:{anchor:cur.from+r.replace.length}});
-      },0);
+  for(const r of rules){
+    if(r.matchFn(lt)){
+      view.dispatch({changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
+        selection:{anchor:line.from+r.replace.length}});
       return;
     }
+  }
+}
+// compositionend fires AFTER IME confirms — works on all platforms
+cmHost.addEventListener('compositionend',()=>setTimeout(tryAutoReplace,20));
+// also handle direct typing (non-IME ・ on some keyboards)
+const autoReplace=EditorView.domEventHandlers({
+  input(e){
+    if(e.inputType==='insertText'&&e.data==='・') setTimeout(tryAutoReplace,0);
   }
 });
 
