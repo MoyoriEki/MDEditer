@@ -92,6 +92,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 .tbtn:active{transform:scale(.96);opacity:.8}
 .tbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(200,169,110,.07)}
 .tbtn.flash{border-color:#5a9e6f;color:#5a9e6f;background:rgba(90,158,111,.1)}
+.icon-btn.flash{color:#5a9e6f}
 
 /* ── EDITOR ── */
 #editor-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column}
@@ -158,6 +159,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
     <div id="sidebar-top">
       <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル"><span class="material-icon">add</span></button>
       <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ"><span class="material-icon">create_new_folder</span></button>
+      <button type="button" class="icon-btn" id="export-btn" title="名前を付けて保存"><span class="material-icon">download</span></button>
       <button type="button" class="icon-btn" id="refresh-btn" title="更新"><span class="material-icon">refresh</span></button>
     </div>
     <div id="file-tree"><div class="tree-msg">接続してください</div></div>
@@ -165,7 +167,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v17</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v18</div>
     </div>
   </div>
 
@@ -176,11 +178,10 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="filename-display">—</div>
       <div id="toolbar-spacer"></div>
       <div id="unsaved-dot"></div>
-      <button type="button" class="tbtn on" id="mode-btn" title="プレビュー切替">●</button>
+      <button type="button" class="tbtn on" id="mode-btn" title="プレビュー切替">表示</button>
       <button type="button" class="tbtn" id="undo-btn" title="取り消し"><span class="material-icon">undo</span></button>
       <button type="button" class="tbtn" id="redo-btn" title="やり直し"><span class="material-icon">redo</span></button>
       <button type="button" class="tbtn" id="overwrite-btn" title="上書き保存"><span class="material-icon">save</span></button>
-      <button type="button" class="tbtn" id="export-btn" title="書き出し"><span class="material-icon">download</span></button>
     </div>
     <div id="editor-wrap">
       <div id="empty-state">Dropboxに接続してファイルを選択</div>
@@ -404,26 +405,34 @@ function setValue(text){
 }
 
 // ── iOS: suppress keyboard navigation bar ──
-// Safari shows prev/next/done bar when it finds multiple focusable form elements.
-// Setting them to disabled makes Safari ignore them entirely.
+// Safari shows prev/next/done bar when multiple form elements exist in DOM.
+// tabindex/-1 and disabled don't work. Removing from DOM entirely does.
 const isIOS=/iPad|iPhone/.test(navigator.userAgent);
-let _disabledEls=[];
-function suppressFormNav(){
-  if(!isIOS)return;
-  _disabledEls=[];
-  document.querySelectorAll('input:not([disabled]),textarea:not([disabled]),select:not([disabled])').forEach(el=>{
-    if(cmHost.contains(el))return;
-    _disabledEls.push(el);
-    el.disabled=true;
+const modalOverlays=[
+  document.getElementById('dbx-modal'),
+  document.getElementById('settings-modal'),
+  document.getElementById('newfile-modal'),
+  document.getElementById('newfolder-modal'),
+];
+let _detachedModals=[];
+function detachModals(){
+  if(!isIOS||_detachedModals.length)return;
+  modalOverlays.forEach(el=>{
+    if(el&&el.parentNode&&!el.classList.contains('v')){
+      _detachedModals.push({el,parent:el.parentNode,next:el.nextSibling});
+      el.parentNode.removeChild(el);
+    }
   });
 }
-function restoreFormNav(){
+function reattachModals(){
   if(!isIOS)return;
-  _disabledEls.forEach(el=>{el.disabled=false;});
-  _disabledEls=[];
+  _detachedModals.forEach(({el,parent,next})=>{
+    parent.insertBefore(el,next);
+  });
+  _detachedModals=[];
 }
-cmHost.addEventListener('focusin',suppressFormNav);
-cmHost.addEventListener('focusout',restoreFormNav);
+cmHost.addEventListener('focusin',detachModals);
+cmHost.addEventListener('focusout',reattachModals);
 
 // ── theme ──
 function applyTheme(dark){
@@ -726,10 +735,10 @@ modeBtn.addEventListener('click',()=>{
   if(isPreview){
     renderPreview(); previewEl.classList.add('v');
     cmHost.style.display='none';
-    modeBtn.textContent='〇'; stM.textContent='プレビュー';
+    modeBtn.textContent='編集'; stM.textContent='プレビュー';
   }else{
     previewEl.classList.remove('v'); cmHost.style.display='';
-    modeBtn.textContent='●'; stM.textContent='編集中'; view.focus();
+    modeBtn.textContent='表示'; stM.textContent='編集中'; view.focus();
   }
   modeBtn.classList.toggle('on',!isPreview);
 });
@@ -820,6 +829,7 @@ document.getElementById('refresh-btn').addEventListener('click',()=>{if(dbxToken
 document.getElementById('new-file-btn').addEventListener('click',()=>{
   if(!dbxToken){alert('先に接続してください');return;}
   document.getElementById('newfile-input').value='';
+  reattachModals();
   newfileModal.classList.add('v');
   setTimeout(()=>document.getElementById('newfile-input').focus(),50);
 });
@@ -835,6 +845,7 @@ document.getElementById('newfile-input').addEventListener('keydown',e=>{if(e.key
 document.getElementById('new-folder-btn').addEventListener('click',()=>{
   if(!dbxToken){alert('先に接続してください');return;}
   document.getElementById('newfolder-input').value='';
+  reattachModals();
   newfolderModal.classList.add('v');
   setTimeout(()=>document.getElementById('newfolder-input').focus(),50);
 });
@@ -861,7 +872,7 @@ dbxConnectBtn.addEventListener('click',()=>{
     fileTree.innerHTML='<div class="tree-msg">接続してください</div>';
     return;
   }
-  if(!appKey){akInput.value=appKey;dpInput.value=dbxPath;dbxModal.classList.add('v');return;}
+  if(!appKey){akInput.value=appKey;dpInput.value=dbxPath;reattachModals();dbxModal.classList.add('v');return;}
   startAuth();
 });
 document.getElementById('dbx-modal-cancel').addEventListener('click',()=>dbxModal.classList.remove('v'));
@@ -881,6 +892,7 @@ document.getElementById('settings-btn').addEventListener('click',()=>{
   document.getElementById('cfg-lh').value=cfg.lh;
   document.getElementById('cfg-theme').value=cfg.theme||'dark';
   document.getElementById('cfg-path').value=dbxPath;
+  reattachModals();
   settingsModal.classList.add('v');
 });
 document.getElementById('settings-cancel').addEventListener('click',()=>settingsModal.classList.remove('v'));
