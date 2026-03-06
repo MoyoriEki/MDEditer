@@ -76,11 +76,11 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 /* ── MAIN ── */
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
-#toolbar{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+#toolbar{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;flex-wrap:nowrap}
 #toggle-sidebar{background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:22px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1;margin-right:0}
 #toggle-sidebar:hover{color:var(--accent)}
 #filename-display{flex:1;font-size:14px;color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px;margin-right:auto}
-@media(max-width:768px){#filename-display{display:none}#filename-status{display:block !important}#toolbar-spacer{flex:1}}
+@media(max-width:768px){#filename-display{display:none}#filename-status{display:block !important}#toggle-sidebar{margin-right:auto}}
 #toolbar-spacer{flex:0}
 #filename-display b{color:var(--text);font-weight:400}
 #filename-display{font-weight:400;color:var(--text)}
@@ -192,7 +192,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v26</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v27</div>
     </div>
   </div>
 
@@ -510,20 +510,19 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-// updateListener with view.composing check — skips IME intermediate states
+// queueMicrotask defers dispatch to next tick, condition guard prevents re-trigger
 const autoReplace=EditorView.updateListener.of(u=>{
-  if(!u.docChanged||u.view.composing)return;
+  if(!u.docChanged)return;
   const st=u.state;
   const pos=st.selection.main.head;
   const line=st.doc.lineAt(pos);
   const lt=line.text;
   // ・ at line start → replace with "- "
-  // After replacement, line starts with "- " so this won't re-trigger
   if(lt.startsWith('・')){
     queueMicrotask(()=>{
-      if(!view)return;
+      if(!view||view.composing)return; // still composing on next tick? skip
       const cur=view.state.doc.lineAt(view.state.selection.main.head);
-      if(!cur.text.startsWith('・'))return; // already replaced
+      if(!cur.text.startsWith('・'))return;
       view.dispatch({changes:{from:cur.from,to:cur.from+1,insert:'- '},
         selection:{anchor:cur.from+2}});
     });
@@ -539,7 +538,7 @@ const autoReplace=EditorView.updateListener.of(u=>{
   for(const r of fwRules){
     if(lt===r.find){
       queueMicrotask(()=>{
-        if(!view)return;
+        if(!view||view.composing)return;
         const cur=view.state.doc.lineAt(view.state.selection.main.head);
         if(cur.text!==r.find)return;
         view.dispatch({changes:{from:cur.from,to:cur.from+r.find.length,insert:r.replace},
