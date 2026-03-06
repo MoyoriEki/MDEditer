@@ -400,7 +400,6 @@ const directInputReplace = EditorView.inputHandler.of((view, from, to, text, ins
   if(!atLineStart) return false;
 
   const directRules = new Map([
-    ['・', '- '],
     ['＃ ', '# '],
     ['＃＃ ', '## '],
     ['＃＃＃ ', '### '],
@@ -546,6 +545,7 @@ function getAutoReplaceSpec(state){
   const line=state.doc.lineAt(sel.head);
   const lt=line.text;
   const rules=[
+    {find:'・', replace:'- ', matchFn:t=>t.startsWith('・')},
     {find:'＃ ', replace:'# ', matchFn:t=>t==='＃ '},
     {find:'＃＃ ', replace:'## ', matchFn:t=>t==='＃＃ '},
     {find:'＃＃＃ ', replace:'### ', matchFn:t=>t==='＃＃＃ '},
@@ -553,9 +553,10 @@ function getAutoReplaceSpec(state){
   ];
   for(const r of rules){
     if(r.matchFn(lt)){
+      const delta=r.replace.length-r.find.length;
       return {
         changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
-        selection:{anchor:line.from+r.replace.length},
+        selection:{anchor:Math.max(line.from, sel.head+delta)},
         annotations:autoReplaceAnn.of(true),
       };
     }
