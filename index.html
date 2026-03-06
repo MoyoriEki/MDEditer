@@ -435,68 +435,89 @@ let dbxRefreshToken=localStorage.getItem('mdapp_dbx_refresh')||null;
 function dbxArg(obj){
   return JSON.stringify(obj).replace(/[\u0080-\uFFFF]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
 }
+function forceDisconnect(msg){
+  dbxToken=null;dbxRefreshToken=null;
+  localStorage.removeItem('mdapp_dbx_token');
+  localStorage.removeItem('mdapp_dbx_refresh');
+  Object.keys(localStorage).filter(k=>k.startsWith('mdapp_open_time_')).forEach(k=>localStorage.removeItem(k));
+  dbxStatus.textContent='未接続'; dbxStatus.classList.remove('on');
+  dbxConnectBtn.textContent='Dropbox 接続'; dbxConnectBtn.classList.remove('on');
+  fileTree.innerHTML='<div class="tree-msg">接続してください</div>';
+  currentPath=null;
+  alert(msg||'セッション切れ。再接続してください');
+  throw new Error(msg||'セッション切れ');
+}
+async function handleAuth401(r){
+  // 401 with refresh token → try refresh
+  if(dbxRefreshToken){
+    await refreshAccessToken();
+    return; // caller retries
+  }
+  // no refresh token → force re-auth
+  forceDisconnect('セッション切れ。再接続してください');
+}
+async function isExpiredToken(r){
+  if(r.status===401) return true;
+  // Dropbox may return non-401 with expired_access_token in body
+  if(!r.ok){
+    try{
+      const clone=r.clone();
+      const body=await clone.text();
+      if(body.includes('expired_access_token')) return true;
+    }catch(e){}
+  }
+  return false;
+}
 async function refreshAccessToken(){
-  if(!dbxRefreshToken||!appKey) throw new Error('再認証が必要です');
+  if(!dbxRefreshToken||!appKey) forceDisconnect('再認証が必要です');
   const r=await fetch('https://api.dropboxapi.com/oauth2/token',{
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body:new URLSearchParams({grant_type:'refresh_token',refresh_token:dbxRefreshToken,client_id:appKey}),
   });
   const d=await r.json();
-  if(!d.access_token) throw new Error('トークン更新失敗');
+  if(!d.access_token) forceDisconnect('トークン更新失敗。再接続してください');
   dbxToken=d.access_token;
   localStorage.setItem('mdapp_dbx_token',dbxToken);
   return dbxToken;
 }
 async function dbxFetch(endpoint,body){
-  const doFetch=async()=>{
-    const r=await fetch('https://api.dropboxapi.com/2/'+endpoint,{
-      method:'POST',
-      headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/json'},
-      body:JSON.stringify(body),
-    });
-    if(r.status===401&&dbxRefreshToken){
-      await refreshAccessToken();
-      const r2=await fetch('https://api.dropboxapi.com/2/'+endpoint,{
-        method:'POST',
-        headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/json'},
-        body:JSON.stringify(body),
-      });
-      if(!r2.ok) throw new Error(await r2.text());
-      return r2.json();
-    }
-    if(!r.ok) throw new Error(await r.text());
-    return r.json();
-  };
-  return doFetch();
+  const doReq=async()=>fetch('https://api.dropboxapi.com/2/'+endpoint,{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/json'},
+    body:JSON.stringify(body),
+  });
+  let r=await doReq();
+  if(await isExpiredToken(r)){
+    await handleAuth401(r);
+    r=await doReq();
+  }
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
 }
 async function dbxDownload(path){
-  const doFetch=async(token)=>{
-    return fetch('https://content.dropboxapi.com/2/files/download',{
-      method:'POST',
-      headers:{'Authorization':'Bearer '+token,'Dropbox-API-Arg':dbxArg({path})},
-    });
-  };
-  let r=await doFetch(dbxToken);
-  if(r.status===401&&dbxRefreshToken){
-    await refreshAccessToken();
-    r=await doFetch(dbxToken);
+  const doReq=async()=>fetch('https://content.dropboxapi.com/2/files/download',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+dbxToken,'Dropbox-API-Arg':dbxArg({path})},
+  });
+  let r=await doReq();
+  if(await isExpiredToken(r)){
+    await handleAuth401(r);
+    r=await doReq();
   }
   if(!r.ok) throw new Error(await r.text());
   return r.text();
 }
 async function dbxUpload(path,content){
-  const doFetch=async(token)=>{
-    return fetch('https://content.dropboxapi.com/2/files/upload',{
-      method:'POST',
-      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/octet-stream','Dropbox-API-Arg':dbxArg({path,mode:'overwrite',autorename:false})},
-      body:content,
-    });
-  };
-  let r=await doFetch(dbxToken);
-  if(r.status===401&&dbxRefreshToken){
-    await refreshAccessToken();
-    r=await doFetch(dbxToken);
+  const doReq=async()=>fetch('https://content.dropboxapi.com/2/files/upload',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/octet-stream','Dropbox-API-Arg':dbxArg({path,mode:'overwrite',autorename:false})},
+    body:content,
+  });
+  let r=await doReq();
+  if(await isExpiredToken(r)){
+    await handleAuth401(r);
+    r=await doReq();
   }
   if(!r.ok) throw new Error(await r.text());
   return r.json();
@@ -522,6 +543,8 @@ async function loadTree(containerEl, folderPath){
     }
     renderEntries(containerEl, entries, folderPath);
   }catch(e){
+    // forceDisconnect already cleaned up the UI
+    if(!dbxToken){return;}
     containerEl.innerHTML='';
     const errDiv=document.createElement('div');
     errDiv.className='tree-msg';
@@ -715,34 +738,39 @@ async function checkAuth(){
         }
         localStorage.removeItem('mdapp_dbx_verifier');
         window.history.replaceState({},'',location.pathname);
-        onConnected();
+        await onConnected();
       }
     }catch(e){console.error(e);}
     return;
   }
   const t=localStorage.getItem('mdapp_dbx_token');
-  if(t){dbxToken=t;onConnected();}
+  if(t){dbxToken=t;await onConnected();}
 }
-function onConnected(){
+async function onConnected(){
   dbxStatus.textContent='接続中'; dbxStatus.classList.add('on');
   dbxConnectBtn.textContent='切断'; dbxConnectBtn.classList.add('on');
-  loadTree(fileTree,dbxPath||'');
+  try{
+    await loadTree(fileTree,dbxPath||'');
+  }catch(e){
+    // forceDisconnect already handled the UI
+    if(!dbxToken) return;
+    console.error('loadTree failed',e);
+    return;
+  }
   // 最後に開いたファイルを自動で開く
   const lastPath=localStorage.getItem('mdapp_last_path');
   const lastName=localStorage.getItem('mdapp_last_name');
   if(lastPath&&lastName){
-    setTimeout(async()=>{
-      try{
-        const text=await dbxDownload(lastPath);
-        currentPath=lastPath;
-        fnDisplay.textContent=lastName;
-        document.getElementById('filename-status').textContent=lastName;
-        emptyState.classList.add('hidden');
-        cmHost.style.display='';
-        if(!view) buildEditor(text); else setValue(text);
-        setUnsaved(false); updateStatus(); stM.textContent='編集';
-      }catch(e){console.warn('前回ファイルの読み込み失敗',e);}
-    },500);
+    try{
+      const text=await dbxDownload(lastPath);
+      currentPath=lastPath;
+      fnDisplay.textContent=lastName;
+      document.getElementById('filename-status').textContent=lastName;
+      emptyState.classList.add('hidden');
+      cmHost.style.display='';
+      if(!view) buildEditor(text); else setValue(text);
+      setUnsaved(false); updateStatus(); stM.textContent='編集';
+    }catch(e){console.warn('前回ファイルの読み込み失敗',e);}
   }
 }
 async function startAuth(){
