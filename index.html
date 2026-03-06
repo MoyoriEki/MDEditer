@@ -512,38 +512,47 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-// Run exactly once after the document changed and IME composition has settled.
-const autoReplaceAnno=Annotation.define();
-function getAutoReplaceSpec(state){
-  const sel=state.selection.main;
-  if(!sel.empty) return null;
-  const line=state.doc.lineAt(sel.head);
-  const t=line.text;
-  const rules=[
-    {find:'・', replace:'- ', match:t=>t==='・' || t.startsWith('・')},
-    {find:'＃ ', replace:'# ', match:t=>t==='＃ '},
-    {find:'＃＃ ', replace:'## ', match:t=>t==='＃＃ '},
-    {find:'＃＃＃ ', replace:'### ', match:t=>t==='＃＃＃ '},
-    {find:'＞ ', replace:'> ', match:t=>t==='＞ '},
-  ];
-  for(const r of rules){
-    if(r.match(t)){
-      const anchor=Math.max(line.from + r.replace.length, sel.head + (r.replace.length - r.find.length));
-      return {
-        changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
-        selection:{anchor},
-        annotations:autoReplaceAnno.of(true)
-      };
-    }
-  }
-  return null;
-}
-const autoReplace=EditorView.updateListener.of(u=>{
+const autoReplaceTxn = Annotation.define();
+
+const autoReplace = EditorView.updateListener.of(u=>{
   if(!u.docChanged) return;
-  if(u.view.composing) return;
-  if(u.transactions.some(tr=>tr.annotation(autoReplaceAnno))) return;
-  const spec=getAutoReplaceSpec(u.state);
-  if(spec) u.view.dispatch(spec);
+  if(u.transactions.some(tr=>tr.annotation(autoReplaceTxn))) return;
+  if(u.view.composing) return; // IME変換中は触らない
+
+  const sel = u.state.selection.main;
+  if(!sel.empty) return;
+
+  const pos = sel.head;
+  const line = u.state.doc.lineAt(pos);
+  const text = line.text;
+
+  let change = null;
+  let cursor = null;
+
+  if(text === '・'){
+    change = {from: line.from, to: line.to, insert: '- '};
+    cursor = line.from + 2;
+  }else if(text === '＃ '){
+    change = {from: line.from, to: line.to, insert: '# '};
+    cursor = line.from + 2;
+  }else if(text === '＃＃ '){
+    change = {from: line.from, to: line.to, insert: '## '};
+    cursor = line.from + 3;
+  }else if(text === '＃＃＃ '){
+    change = {from: line.from, to: line.to, insert: '### '};
+    cursor = line.from + 4;
+  }else if(text === '＞ '){
+    change = {from: line.from, to: line.to, insert: '> '};
+    cursor = line.from + 2;
+  }
+
+  if(!change) return;
+
+  u.view.dispatch({
+    changes: change,
+    selection: {anchor: cursor},
+    annotations: autoReplaceTxn.of(true)
+  });
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
