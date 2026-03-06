@@ -315,7 +315,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 
 <script type="module">
 import {EditorView,keymap,ViewPlugin,Decoration} from 'https://esm.sh/@codemirror/view@6';
-import {EditorState,Compartment,Prec,Annotation} from 'https://esm.sh/@codemirror/state@6';
+import {EditorState,Compartment,Prec} from 'https://esm.sh/@codemirror/state@6';
 import {markdown} from 'https://esm.sh/@codemirror/lang-markdown@6';
 import {defaultKeymap,historyKeymap,history,undo,redo} from 'https://esm.sh/@codemirror/commands@6';
 import {syntaxHighlighting,HighlightStyle,syntaxTree,ensureSyntaxTree} from 'https://esm.sh/@codemirror/language@6';
@@ -392,30 +392,6 @@ function makeTheme(dark){
   return EditorView.theme({'&':{background:c.bg,color:c.text,height:'100%'},'.cm-scroller':{overflow:'auto'},'.cm-content':{caretColor:c.cur},'.cm-cursor':{borderLeft:'2px solid '+c.cur},'.cm-selectionBackground':{background:c.sel},'&.cm-focused .cm-selectionBackground':{background:c.selF},'.cm-gutters':{display:'none'},'.cm-activeLine':{background:c.act}},{dark});
 }
 
-
-// ── direct input replacement (prevents IME post-fix duplication) ──
-const directInputReplace = EditorView.inputHandler.of((view, from, to, text, insert) => {
-  const line = view.state.doc.lineAt(from);
-  const atLineStart = from === line.from && to === from;
-  if(!atLineStart) return false;
-
-  const directRules = new Map([
-    ['＃ ', '# '],
-    ['＃＃ ', '## '],
-    ['＃＃＃ ', '### '],
-    ['＞ ', '> '],
-  ]);
-  const replacement = directRules.get(text);
-  if(!replacement) return false;
-
-  view.dispatch({
-    changes: {from, to, insert: replacement},
-    selection: {anchor: from + replacement.length},
-    annotations: autoReplaceAnn.of(true),
-  });
-  return true;
-});
-
 // ── editor ──
 let view=null;
 const themeComp=new Compartment();
@@ -435,7 +411,6 @@ function buildEditor(doc=''){
       themeComp.of(makeTheme(isDark)),
       EditorView.lineWrapping,
       liveMarkdown,
-      directInputReplace,
       autoReplace,
       smartBackspaceCleanup,
       EditorView.updateListener.of(u=>{if(u.docChanged){setUnsaved(true);updateStatus();}}),
@@ -537,27 +512,27 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-// Synchronous doc-change based replacement to avoid IME timing glitches
-const autoReplaceAnn=Annotation.define();
+// Run exactly once after the document changed and IME composition has settled.
+const autoReplaceAnno=Annotation.define();
 function getAutoReplaceSpec(state){
   const sel=state.selection.main;
   if(!sel.empty) return null;
   const line=state.doc.lineAt(sel.head);
-  const lt=line.text;
+  const t=line.text;
   const rules=[
-    {find:'・', replace:'- ', matchFn:t=>t.startsWith('・')},
-    {find:'＃ ', replace:'# ', matchFn:t=>t==='＃ '},
-    {find:'＃＃ ', replace:'## ', matchFn:t=>t==='＃＃ '},
-    {find:'＃＃＃ ', replace:'### ', matchFn:t=>t==='＃＃＃ '},
-    {find:'＞ ', replace:'> ', matchFn:t=>t==='＞ '},
+    {find:'・', replace:'- ', match:t=>t==='・' || t.startsWith('・')},
+    {find:'＃ ', replace:'# ', match:t=>t==='＃ '},
+    {find:'＃＃ ', replace:'## ', match:t=>t==='＃＃ '},
+    {find:'＃＃＃ ', replace:'### ', match:t=>t==='＃＃＃ '},
+    {find:'＞ ', replace:'> ', match:t=>t==='＞ '},
   ];
   for(const r of rules){
-    if(r.matchFn(lt)){
-      const delta=r.replace.length-r.find.length;
+    if(r.match(t)){
+      const anchor=Math.max(line.from + r.replace.length, sel.head + (r.replace.length - r.find.length));
       return {
         changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
-        selection:{anchor:Math.max(line.from, sel.head+delta)},
-        annotations:autoReplaceAnn.of(true),
+        selection:{anchor},
+        annotations:autoReplaceAnno.of(true)
       };
     }
   }
@@ -565,7 +540,8 @@ function getAutoReplaceSpec(state){
 }
 const autoReplace=EditorView.updateListener.of(u=>{
   if(!u.docChanged) return;
-  if(u.transactions.some(tr=>tr.annotation(autoReplaceAnn))) return;
+  if(u.view.composing) return;
+  if(u.transactions.some(tr=>tr.annotation(autoReplaceAnno))) return;
   const spec=getAutoReplaceSpec(u.state);
   if(spec) u.view.dispatch(spec);
 });
