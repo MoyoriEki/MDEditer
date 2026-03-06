@@ -41,8 +41,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 #sidebar{width:250px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .15s,opacity .15s}
 #sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
-#sidebar-top{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px;justify-content:flex-start}
-#sidebar-top-label{font-size:9px;letter-spacing:.22em;color:var(--text-dim);text-transform:uppercase;flex:1}
+#sidebar-top{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px}
 .icon-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:20px;padding:6px 10px;border-radius:2px;transition:color .15s,background .15s;line-height:1;display:flex;align-items:center}
 .icon-btn:hover{color:var(--accent);background:var(--bg3)}
 .icon-btn:active{opacity:.7}
@@ -184,13 +183,14 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ"><span class="material-icon">create_new_folder</span></button>
       <button type="button" class="icon-btn" id="export-btn" title="名前を付けて保存"><span class="material-icon">download</span></button>
       <button type="button" class="icon-btn" id="refresh-btn" title="更新"><span class="material-icon">refresh</span></button>
+      <span style="flex:1"></span>
     </div>
     <div id="file-tree"><div class="tree-msg">接続してください</div></div>
     <div id="sidebar-bottom">
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v23</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v24</div>
     </div>
   </div>
 
@@ -506,16 +506,25 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-const autoReplace=EditorView.inputHandler.of((view,from,to,text)=>{
-  const line=view.state.doc.lineAt(from);
-  const col=from-line.from;
-  const lineSoFar=line.text.substring(0,col)+text;
-  // ・ at empty line start
-  if(col===0&&line.text.length===0&&text==='・'){
-    view.dispatch({changes:{from,to,insert:'- '},selection:{anchor:from+2}});
-    return true;
+// Uses updateListener because inputHandler doesn't fire for IME-composed chars
+let _arLock=false;
+const autoReplace=EditorView.updateListener.of(u=>{
+  if(!u.docChanged||_arLock)return;
+  const st=u.state;
+  const pos=st.selection.main.head;
+  const line=st.doc.lineAt(pos);
+  const offset=pos-line.from;
+  const lt=line.text;
+  // ・ at line start
+  if(lt.startsWith('・')&&offset<=1){
+    _arLock=true;
+    try{
+      u.view.dispatch({changes:{from:line.from,to:line.from+1,insert:'- '},
+        selection:{anchor:line.from+2}});
+    }finally{_arLock=false;}
+    return;
   }
-  // full-width prefix + space → half-width
+  // full-width prefix conversions
   const fwRules=[
     {find:'＃ ',  replace:'# '},
     {find:'＃＃ ', replace:'## '},
@@ -523,13 +532,15 @@ const autoReplace=EditorView.inputHandler.of((view,from,to,text)=>{
     {find:'＞ ',  replace:'> '},
   ];
   for(const r of fwRules){
-    if(lineSoFar===r.find){
-      view.dispatch({changes:{from:line.from,to:from,insert:r.replace},
-        selection:{anchor:line.from+r.replace.length}});
-      return true;
+    if(lt.startsWith(r.find)&&offset===r.find.length){
+      _arLock=true;
+      try{
+        u.view.dispatch({changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
+          selection:{anchor:line.from+r.replace.length}});
+      }finally{_arLock=false;}
+      return;
     }
   }
-  return false;
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
