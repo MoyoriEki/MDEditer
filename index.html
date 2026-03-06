@@ -189,7 +189,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v29</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v30</div>
     </div>
   </div>
 
@@ -376,7 +376,6 @@ applyFontCfg();
 // ── highlight ──
 function makeHL(dark){
   return HighlightStyle.define([
-    {tag:[tags.heading1,tags.heading2,tags.heading3,tags.heading4,tags.heading5,tags.heading6],color:dark?'#c8a96e':'#8a6830',fontWeight:'400'},
     {tag:tags.strong,color:dark?'#e0dbd2':'#0a0806',fontWeight:'700'},
     {tag:tags.emphasis,color:dark?'#a8b8d0':'#2a4060',fontStyle:'italic'},
     {tag:tags.monospace,color:dark?'#9ec49a':'#1a5a28'},
@@ -469,7 +468,7 @@ const liveMarkdown=ViewPlugin.fromClass(class{
       if(nf>st.doc.length)return false; // safety
       const line=getLine(nf);
       const onCursor=line.number===curLine;
-      if(nm.startsWith('ATXHeading')&&headingLine[nm]&&!onCursor){
+      if(nm.startsWith('ATXHeading')&&headingLine[nm]){
         if(line.text.trimStart().startsWith('#')){
           lineDecos.push(headingLine[nm].range(line.from));
         }
@@ -535,13 +534,17 @@ function tryAutoReplace(){
     }
   }
 }
-// compositionend fires AFTER IME confirms — works on all platforms
-cmHost.addEventListener('compositionend',()=>setTimeout(tryAutoReplace,20));
-// also handle direct typing (non-IME ・ on some keyboards)
+// compositionend fires AFTER IME confirms
+let _arTimer=0;
+function scheduleAutoReplace(ms){
+  clearTimeout(_arTimer);
+  _arTimer=setTimeout(tryAutoReplace,ms);
+}
+cmHost.addEventListener('compositionend',()=>scheduleAutoReplace(30));
+cmHost.addEventListener('input',()=>scheduleAutoReplace(10));
+// keep as CM6 extension too (belt and suspenders)
 const autoReplace=EditorView.domEventHandlers({
-  input(e){
-    if(e.inputType==='insertText'&&e.data==='・') setTimeout(tryAutoReplace,0);
-  }
+  compositionend(){scheduleAutoReplace(30);}
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
