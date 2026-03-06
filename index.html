@@ -190,7 +190,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v21</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v22</div>
     </div>
   </div>
 
@@ -503,44 +503,54 @@ const liveMarkdown=ViewPlugin.fromClass(class{
   }
 },{decorations:v=>v.decorations});
 
-// ── auto-replace (・→ - ) post-hoc for reliable iOS IME ──
-const autoReplaceRules=[
-  {find:'・',  replace:'- '},
-  {find:'＃ ',  replace:'# '},
-  {find:'＃＃ ', replace:'## '},
-  {find:'＃＃＃ ',replace:'### '},
-  {find:'＞ ',  replace:'> '},
-];
-let _arLock=false;
-const autoReplace=EditorView.updateListener.of(u=>{
-  if(!u.docChanged||_arLock)return;
-  const st=u.state;
-  const pos=st.selection.main.head;
-  const line=st.doc.lineAt(pos);
-  for(const r of autoReplaceRules){
-    if(line.text===r.find||(line.text.startsWith(r.find)&&pos===line.from+r.find.length)){
-      _arLock=true;
-      u.view.dispatch({changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
+// ── auto-replace (・→ - , ＃→#, etc.) ──
+const autoReplace=EditorView.inputHandler.of((view,from,to,text)=>{
+  const line=view.state.doc.lineAt(from);
+  const col=from-line.from;
+  const lineSoFar=line.text.substring(0,col)+text;
+  // ・ at empty line start
+  if(col===0&&line.text.length===0&&text==='・'){
+    view.dispatch({changes:{from,to,insert:'- '},selection:{anchor:from+2}});
+    return true;
+  }
+  // full-width prefix + space → half-width
+  const fwRules=[
+    {find:'＃ ',  replace:'# '},
+    {find:'＃＃ ', replace:'## '},
+    {find:'＃＃＃ ',replace:'### '},
+    {find:'＞ ',  replace:'> '},
+  ];
+  for(const r of fwRules){
+    if(lineSoFar===r.find){
+      view.dispatch({changes:{from:line.from,to:from,insert:r.replace},
         selection:{anchor:line.from+r.replace.length}});
-      _arLock=false;
-      return;
+      return true;
     }
   }
+  return false;
 });
 
-// ── smart backspace: delete "- " / "> " / "# " as a unit at line start ──
+// ── smart backspace: delete "- " / "> " / "# " as a unit ──
+// Fires when cursor is anywhere inside the prefix (pos 1 or 2 for "- ")
 function smartBackspace(v){
   const sel=v.state.selection.main;
   if(!sel.empty) return false;
   const line=v.state.doc.lineAt(sel.head);
   const offset=sel.head-line.from;
+  if(offset===0) return false;
   const lineText=line.text;
-  const prefixes=['- ','> ','# ','## ','### ','#### '];
+  // longest match first
+  const prefixes=['#### ','### ','## ','# ','- ','> '];
   for(const p of prefixes){
-    if(offset===p.length&&lineText.startsWith(p)){
+    if(lineText.startsWith(p)&&offset<=p.length){
       v.dispatch({changes:{from:line.from,to:line.from+p.length}});
       return true;
     }
+  }
+  // also catch lone space after prefix was partially deleted (e.g. " text" from broken "- text")
+  if(offset===1&&lineText.startsWith(' ')){
+    v.dispatch({changes:{from:line.from,to:line.from+1}});
+    return true;
   }
   return false;
 }
