@@ -79,7 +79,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 #toggle-sidebar{background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:22px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1;margin-right:0}
 #toggle-sidebar:hover{color:var(--accent)}
 #filename-display{flex:1;font-size:14px;color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px;margin-right:auto}
-@media(max-width:768px){#filename-display{display:none}#filename-status{display:block !important}#toggle-sidebar{margin-right:auto}}
+@media(max-width:768px){#filename-display{display:block}#filename-status{display:none !important}#toggle-sidebar{margin-right:0}}
 #toolbar-spacer{flex:0}
 #filename-display b{color:var(--text);font-weight:400}
 #filename-display{font-weight:400;color:var(--text)}
@@ -171,7 +171,17 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
   .tbtn{padding:6px 10px;font-size:12px;letter-spacing:.04em}
   .tbtn .material-icon{font-size:16px}
   #toggle-sidebar{padding:2px 4px}
+  #cm-host .cm-scroller{padding-bottom:50vh !important}
+  #preview{padding-bottom:50vh !important}
 }
+.sidebar-close-btn{display:none}
+@media(max-width:768px){.sidebar-close-btn{display:flex}}
+
+/* ── STATUSBAR SETTINGS ── */
+#statusbar.sb-hidden{display:none}
+
+/* ── RENAME INLINE ── */
+.tree-rename-input{background:var(--bg);border:1px solid var(--accent);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:1px 4px;outline:none;border-radius:2px;width:100%;min-width:0}
 </style>
 </head>
 <body>
@@ -179,6 +189,8 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
   <!-- SIDEBAR -->
   <div id="sidebar">
     <div id="sidebar-top">
+      <button type="button" class="icon-btn sidebar-close-btn" id="sidebar-close" title="サイドバーを閉じる"><span class="material-icon">close</span></button>
+      <div style="flex:1"></div>
       <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル"><span class="material-icon">add</span></button>
       <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ"><span class="material-icon">create_new_folder</span></button>
       <button type="button" class="icon-btn" id="export-btn" title="名前を付けて保存"><span class="material-icon">download</span></button>
@@ -189,7 +201,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v31</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v3.2</div>
     </div>
   </div>
 
@@ -203,7 +215,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <button type="button" class="tbtn on" id="mode-btn" title="プレビュー切替">表示</button>
       <button type="button" class="tbtn" id="undo-btn" title="取り消し"><span class="material-icon">undo</span></button>
       <button type="button" class="tbtn" id="redo-btn" title="やり直し"><span class="material-icon">redo</span></button>
-      <button type="button" class="tbtn" id="overwrite-btn" title="上書き保存"><span class="material-icon">save</span></button>
+      <button type="button" class="tbtn" id="sync-btn" title="同期（保存＋更新）"><span class="material-icon">sync</span></button>
     </div>
     <div id="editor-wrap">
       <div id="empty-state">Dropboxに接続してファイルを選択</div>
@@ -280,6 +292,23 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
     </select>
     <label>Dropboxフォルダパス</label>
     <input id="cfg-path" type="text" placeholder="/$md関連">
+    <label>自動保存</label>
+    <select id="cfg-autosave">
+      <option value="3">3秒（推奨）</option>
+      <option value="5">5秒</option>
+      <option value="10">10秒</option>
+      <option value="0">オフ（手動保存）</option>
+    </select>
+    <label>ステータスバー</label>
+    <select id="cfg-statusbar">
+      <option value="show">表示</option>
+      <option value="hide">非表示</option>
+    </select>
+    <label>キーボード表示時のステータスバー</label>
+    <select id="cfg-sb-keyboard">
+      <option value="show">キーボード上に表示</option>
+      <option value="hide">非表示にする</option>
+    </select>
     <div class="modal-actions">
       <button type="button" id="settings-cancel">キャンセル</button>
       <button type="button" id="settings-ok" class="primary">適用</button>
@@ -313,6 +342,19 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
   </div>
 </div>
 
+<!-- リネームモーダル -->
+<div class="modal-overlay" id="rename-modal">
+  <div class="modal-box" style="width:360px">
+    <h3>名前の変更</h3>
+    <label>新しい名前</label>
+    <input id="rename-input" type="text" placeholder="new-name.md">
+    <div class="modal-actions">
+      <button type="button" id="rename-cancel">キャンセル</button>
+      <button type="button" id="rename-ok" class="primary">変更</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import {EditorView,keymap,ViewPlugin,Decoration} from 'https://esm.sh/@codemirror/view@6';
 import {EditorState,Compartment,Prec} from 'https://esm.sh/@codemirror/state@6';
@@ -331,7 +373,7 @@ let isPreview = false, unsaved = false, isDark = false;
 
 // cfg
 let cfg = JSON.parse(localStorage.getItem('mdapp_cfg') || '{}');
-cfg = {font:"'IBM Plex Mono',monospace", previewFont:"'Spectral',serif", size:16, lh:1.9, theme:'light', ...cfg};
+cfg = {font:"'IBM Plex Mono',monospace", previewFont:"'Spectral',serif", size:16, lh:1.9, theme:'light', autosave:3, statusbar:'show', sbKeyboard:'show', ...cfg};
 
 // ── elements ──
 const sidebar       = document.getElementById('sidebar');
@@ -342,7 +384,7 @@ const emptyState    = document.getElementById('empty-state');
 const cmHost        = document.getElementById('cm-host');
 const previewEl     = document.getElementById('preview');
 const modeBtn       = document.getElementById('mode-btn');
-const overwriteBtn  = document.getElementById('overwrite-btn');
+const syncBtn       = document.getElementById('sync-btn');
 const exportBtn     = document.getElementById('export-btn');
 
 const undoBtn     = document.getElementById('undo-btn');
@@ -356,6 +398,7 @@ const dbxModal      = document.getElementById('dbx-modal');
 const settingsModal = document.getElementById('settings-modal');
 const newfileModal  = document.getElementById('newfile-modal');
 const newfolderModal= document.getElementById('newfolder-modal');
+const renameModal   = document.getElementById('rename-modal');
 const akInput       = document.getElementById('appkey-input');
 const dpInput       = document.getElementById('dbxpath-input');
 
@@ -413,7 +456,7 @@ function buildEditor(doc=''){
       liveMarkdown,
       autoReplace,
       smartBackspaceCleanup,
-      EditorView.updateListener.of(u=>{if(u.docChanged){setUnsaved(true);updateStatus();}}),
+      EditorView.updateListener.of(u=>{if(u.docChanged){setUnsaved(true);updateStatus();scheduleAutoSave();}}),
     ]}),
     parent:cmHost,
   });
@@ -601,6 +644,7 @@ const modalOverlays=[
   document.getElementById('settings-modal'),
   document.getElementById('newfile-modal'),
   document.getElementById('newfolder-modal'),
+  document.getElementById('rename-modal'),
 ];
 let _detachedModals=[];
 let _neutralizedEls=[];
@@ -666,6 +710,46 @@ function updateStatus(){
 function flashBtn(btn){
   btn.classList.add('flash');
   setTimeout(()=>btn.classList.remove('flash'),400);
+}
+
+// ── auto-save ──
+let _autoSaveTimer=0;
+let _isSaving=false;
+function scheduleAutoSave(){
+  clearTimeout(_autoSaveTimer);
+  const delay=cfg.autosave*1000;
+  if(delay<=0)return;
+  _autoSaveTimer=setTimeout(()=>doAutoSave(),delay);
+}
+async function doAutoSave(){
+  if(!unsaved||!currentPath||!view||_isSaving)return;
+  _isSaving=true;
+  try{
+    await dbxUpload(currentPath,getValue());
+    localStorage.setItem('mdapp_open_time_'+currentPath, Date.now());
+    setUnsaved(false);
+  }catch(e){console.warn('自動保存失敗',e);}
+  _isSaving=false;
+}
+
+// ── statusbar ──
+const statusbar=document.getElementById('statusbar');
+function applyStatusbarCfg(){
+  statusbar.classList.toggle('sb-hidden',cfg.statusbar==='hide');
+}
+applyStatusbarCfg();
+
+// ── keyboard statusbar toggle ──
+if(window.visualViewport){
+  const fullH=window.visualViewport.height;
+  window.visualViewport.addEventListener('resize',()=>{
+    const kbOpen=window.visualViewport.height<fullH*0.75;
+    if(kbOpen&&cfg.sbKeyboard==='hide'){
+      statusbar.classList.add('sb-hidden');
+    }else{
+      applyStatusbarCfg();
+    }
+  });
 }
 
 // ── Dropbox API ──
@@ -767,6 +851,9 @@ async function dbxCreateFolder(path){
 async function dbxDelete(path){
   return dbxFetch('files/delete_v2',{path});
 }
+async function dbxMove(fromPath,toPath){
+  return dbxFetch('files/move_v2',{from_path:fromPath,to_path:toPath,autorename:false});
+}
 
 // ── tree ──
 async function loadTree(containerEl, folderPath){
@@ -810,9 +897,11 @@ function renderEntries(containerEl, entries, parentPath){
     const icon=document.createElement('span'); icon.className='tree-icon'; icon.textContent='▫';
     const label=document.createElement('span'); label.className='tree-name'; label.textContent=folder.name;
     const actions=document.createElement('span'); actions.className='tree-actions';
+    const renBtn=document.createElement('button'); renBtn.className='tree-act-btn'; renBtn.textContent='✎'; renBtn.title='名前変更';
+    renBtn.onclick=(e)=>{e.stopPropagation();startRename(folder.path_display,folder.name,label,row);};
     const delBtn=document.createElement('button'); delBtn.className='tree-act-btn'; delBtn.textContent='×'; delBtn.title='削除';
     delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+folder.name+'" を削除しますか？（中身ごと削除されます）')){try{await dbxDelete(folder.path_display);row.remove();children.remove();}catch(e){alert('エラー: '+e.message);}}};
-    actions.append(delBtn);
+    actions.append(renBtn,delBtn);
     row.append(arrow,icon,label,actions);
 
     const children=document.createElement('div');
@@ -836,10 +925,21 @@ function renderEntries(containerEl, entries, parentPath){
     const icon=document.createElement('span'); icon.className='tree-icon'; icon.textContent='·';
     const label=document.createElement('span'); label.className='tree-name'; label.textContent=file.name;
     const actions=document.createElement('span'); actions.className='tree-actions';
+    const renBtn=document.createElement('button'); renBtn.className='tree-act-btn'; renBtn.textContent='✎'; renBtn.title='名前変更';
+    renBtn.onclick=(e)=>{e.stopPropagation();startRename(file.path_display,file.name,label,row);};
     const delBtn=document.createElement('button'); delBtn.className='tree-act-btn'; delBtn.textContent='×'; delBtn.title='削除';
     delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+file.name+'" を削除しますか？')){try{await dbxDelete(file.path_display);if(currentPath===file.path_display){currentPath=null;fnDisplay.textContent='—';cmHost.style.display='none';emptyState.classList.remove('hidden');}row.remove();}catch(e){alert('エラー: '+e.message);}}};
-    actions.append(delBtn);
+    actions.append(renBtn,delBtn);
     row.append(icon,label,actions);
+    // touchend for mobile (avoid double-tap delay)
+    let _touchMoved=false;
+    row.addEventListener('touchstart',()=>{_touchMoved=false;},{passive:true});
+    row.addEventListener('touchmove',()=>{_touchMoved=true;},{passive:true});
+    row.addEventListener('touchend',(e)=>{
+      if(_touchMoved)return;
+      e.preventDefault();
+      openFile(file.path_display,file.name,row);
+    });
     row.addEventListener('click',()=>openFile(file.path_display,file.name,row));
     containerEl.append(row);
   }
@@ -848,7 +948,11 @@ function renderEntries(containerEl, entries, parentPath){
 // ── file ops ──
 let activeRow=null;
 async function openFile(path,name,row){
-  if(unsaved&&!confirm('保存されていない変更があります。続けますか？'))return;
+  if(unsaved&&currentPath){
+    // 自動保存してから切り替え
+    try{await dbxUpload(currentPath,getValue());localStorage.setItem('mdapp_open_time_'+currentPath,Date.now());}catch(e){console.warn('切替時の自動保存失敗',e);}
+    setUnsaved(false);
+  }
   try{
     const text=await dbxDownload(path);
     currentPath=path;
@@ -887,14 +991,22 @@ async function saveOverwrite(){
       await dbxUpload(backupPath, getValue());
       alert('他のデバイスで編集されていたため、\n別名で保存しました:\n'+backupPath.split('/').pop());
       setUnsaved(false);
-      flashBtn(overwriteBtn);
+      flashBtn(syncBtn);
       return;
     }
     await dbxUpload(currentPath,getValue());
     localStorage.setItem('mdapp_open_time_'+currentPath, Date.now());
     setUnsaved(false);
-    flashBtn(overwriteBtn);
+    flashBtn(syncBtn);
   }catch(e){alert('保存エラー: '+e.message);}
+}
+
+async function syncAll(){
+  if(unsaved&&currentPath&&view){
+    await saveOverwrite();
+  }
+  if(dbxToken) await loadTree(fileTree,dbxPath||'');
+  flashBtn(syncBtn);
 }
 
 function exportFile(){
@@ -906,6 +1018,50 @@ function exportFile(){
   a.download=name;
   a.click();
   flashBtn(exportBtn);
+}
+
+// リネーム
+let _renamePath=null;
+let _renameLabel=null;
+let _renameRow=null;
+function startRename(path,oldName,labelEl,rowEl){
+  _renamePath=path;
+  _renameLabel=labelEl;
+  _renameRow=rowEl;
+  document.getElementById('rename-input').value=oldName;
+  restoreAllFormNav();
+  renameModal.classList.add('v');
+  setTimeout(()=>{
+    const inp=document.getElementById('rename-input');
+    inp.focus();
+    // select name without extension
+    const dot=oldName.lastIndexOf('.');
+    inp.setSelectionRange(0,dot>=0?dot:oldName.length);
+  },50);
+}
+async function doRename(){
+  const newName=document.getElementById('rename-input').value.trim();
+  if(!newName||!_renamePath)return;
+  renameModal.classList.remove('v');
+  const parentDir=_renamePath.substring(0,_renamePath.lastIndexOf('/'));
+  const newPath=parentDir+'/'+newName;
+  try{
+    await dbxMove(_renamePath,newPath);
+    // update label in tree
+    if(_renameLabel) _renameLabel.textContent=newName;
+    // update currentPath if this was the open file
+    if(currentPath===_renamePath){
+      currentPath=newPath;
+      fnDisplay.textContent=newName;
+      document.getElementById('filename-status').textContent=newName;
+      localStorage.setItem('mdapp_last_path',newPath);
+      localStorage.setItem('mdapp_last_name',newName);
+      // migrate open_time
+      const ot=localStorage.getItem('mdapp_open_time_'+_renamePath);
+      if(ot){localStorage.setItem('mdapp_open_time_'+newPath,ot);localStorage.removeItem('mdapp_open_time_'+_renamePath);}
+    }
+  }catch(e){alert('リネームエラー: '+e.message);}
+  _renamePath=null;_renameLabel=null;_renameRow=null;
 }
 
 // 新規ファイル作成
@@ -1025,11 +1181,48 @@ async function startAuth(){
 // ── events ──
 undoBtn.addEventListener('click',()=>{if(view)undo(view);});
 redoBtn.addEventListener('click',()=>{if(view)redo(view);});
-overwriteBtn.addEventListener('click',saveOverwrite);
+syncBtn.addEventListener('click',syncAll);
 exportBtn.addEventListener('click',exportFile);
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='s'){e.preventDefault();saveOverwrite();}});
 
-document.getElementById('refresh-btn').addEventListener('click',()=>{if(dbxToken)loadTree(fileTree,dbxPath||'');});
+// sidebar close (mobile)
+document.getElementById('sidebar-close').addEventListener('click',()=>{
+  sidebarOpen=false;
+  sidebar.classList.add('collapsed');
+});
+
+// beforeunload: last-resort sync save
+window.addEventListener('beforeunload',(e)=>{
+  if(unsaved&&currentPath&&view&&dbxToken){
+    try{
+      const content=getValue();
+      const xhr=new XMLHttpRequest();
+      xhr.open('POST','https://content.dropboxapi.com/2/files/upload',false);
+      xhr.setRequestHeader('Authorization','Bearer '+dbxToken);
+      xhr.setRequestHeader('Content-Type','application/octet-stream');
+      xhr.setRequestHeader('Dropbox-API-Arg',JSON.stringify({path:currentPath,mode:'overwrite',autorename:false}).replace(/[\u0080-\uFFFF]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0')));
+      xhr.send(content);
+    }catch(ex){}
+  }
+});
+// pagehide (iOS Safari) + visibilitychange: auto-save
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'&&unsaved&&currentPath&&view){
+    doAutoSave();
+  }
+});
+window.addEventListener('pagehide',()=>{
+  if(unsaved&&currentPath&&view&&dbxToken){
+    doAutoSave();
+  }
+});
+
+document.getElementById('refresh-btn').addEventListener('click',()=>{if(dbxToken)syncAll();});
+
+// rename modal
+document.getElementById('rename-cancel').addEventListener('click',()=>renameModal.classList.remove('v'));
+document.getElementById('rename-ok').addEventListener('click',doRename);
+document.getElementById('rename-input').addEventListener('keydown',e=>{if(e.key==='Enter')doRename();});
 
 document.getElementById('new-file-btn').addEventListener('click',()=>{
   if(!dbxToken){alert('先に接続してください');return;}
@@ -1097,6 +1290,9 @@ document.getElementById('settings-btn').addEventListener('click',()=>{
   document.getElementById('cfg-lh').value=cfg.lh;
   document.getElementById('cfg-theme').value=cfg.theme||'dark';
   document.getElementById('cfg-path').value=dbxPath;
+  document.getElementById('cfg-autosave').value=cfg.autosave;
+  document.getElementById('cfg-statusbar').value=cfg.statusbar;
+  document.getElementById('cfg-sb-keyboard').value=cfg.sbKeyboard;
   restoreAllFormNav();
   settingsModal.classList.add('v');
 });
@@ -1107,8 +1303,12 @@ document.getElementById('settings-ok').addEventListener('click',()=>{
   cfg.size=parseInt(document.getElementById('cfg-size').value);
   cfg.lh=parseFloat(document.getElementById('cfg-lh').value);
   cfg.theme=document.getElementById('cfg-theme').value;
+  cfg.autosave=parseInt(document.getElementById('cfg-autosave').value);
+  cfg.statusbar=document.getElementById('cfg-statusbar').value;
+  cfg.sbKeyboard=document.getElementById('cfg-sb-keyboard').value;
   localStorage.setItem('mdapp_cfg',JSON.stringify(cfg));
   applyTheme(cfg.theme==='dark');
+  applyStatusbarCfg();
   const newPath=document.getElementById('cfg-path').value.trim();
   if(newPath!==dbxPath){
     dbxPath=newPath;
