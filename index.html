@@ -402,6 +402,34 @@ function setValue(text){
   view.dispatch({changes:{from:0,to:view.state.doc.length,insert:text},selection:{anchor:0}});
 }
 
+// ── iOS: suppress keyboard navigation bar ──
+// Safari shows prev/next/done bar when multiple form elements exist.
+// We hide all other focusable form elements while CM is focused.
+const isIOS=/iPad|iPhone/.test(navigator.userAgent);
+let _savedTabindexes=[];
+function suppressFormNav(){
+  if(!isIOS)return;
+  const els=document.querySelectorAll('input,textarea,select,[contenteditable="true"]');
+  _savedTabindexes=[];
+  els.forEach(el=>{
+    // skip CM's own internal elements
+    if(cmHost.contains(el))return;
+    _savedTabindexes.push({el,val:el.getAttribute('tabindex')});
+    el.setAttribute('tabindex','-1');
+  });
+}
+function restoreFormNav(){
+  if(!isIOS)return;
+  _savedTabindexes.forEach(({el,val})=>{
+    if(val===null) el.removeAttribute('tabindex');
+    else el.setAttribute('tabindex',val);
+  });
+  _savedTabindexes=[];
+}
+// listen on cm-host for focus/blur (captures CM's internal events)
+cmHost.addEventListener('focusin',suppressFormNav);
+cmHost.addEventListener('focusout',restoreFormNav);
+
 // ── theme ──
 function applyTheme(dark){
   isDark=dark;
