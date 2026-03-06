@@ -71,10 +71,10 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospac
 /* ── MAIN ── */
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
-#toolbar{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;flex-wrap:wrap}
-#toggle-sidebar{background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:22px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1}
+#toolbar{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+#toggle-sidebar{background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:22px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1;margin-right:0}
 #toggle-sidebar:hover{color:var(--accent)}
-#filename-display{flex:1;font-size:14px;color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px}
+#filename-display{flex:1;font-size:14px;color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px;margin-right:auto}
 @media(max-width:768px){#filename-display{display:none}#filename-status{display:block !important}#toolbar-spacer{flex:1}}
 #toolbar-spacer{flex:0}
 #filename-display b{color:var(--text);font-weight:400}
@@ -535,6 +535,7 @@ async function openFile(path,name,row){
     document.getElementById('filename-status').textContent=name;
     localStorage.setItem('mdapp_last_path', path);
     localStorage.setItem('mdapp_last_name', name);
+    localStorage.setItem('mdapp_open_time_'+path, Date.now());
     emptyState.classList.add('hidden');
     cmHost.style.display='';
     if(!view) buildEditor(text); else setValue(text);
@@ -550,7 +551,26 @@ async function openFile(path,name,row){
 async function saveOverwrite(){
   if(!currentPath||!view)return;
   try{
+    // 衝突チェック：自分が開いた後にDropboxで更新されてないか確認
+    const openTime = parseInt(localStorage.getItem('mdapp_open_time_'+currentPath)||'0');
+    const meta = await dbxFetch('files/get_metadata',{path:currentPath});
+    const serverTime = new Date(meta.server_modified).getTime();
+    if(serverTime > openTime + 2000){
+      // 他デバイスで更新されてる → 別名保存
+      const ext = currentPath.lastIndexOf('.');
+      const base = ext>=0 ? currentPath.slice(0,ext) : currentPath;
+      const suffix = ext>=0 ? currentPath.slice(ext) : '';
+      const now = new Date();
+      const ts = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'_'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
+      const backupPath = base+'_backup_'+ts+suffix;
+      await dbxUpload(backupPath, getValue());
+      alert('他のデバイスで編集されていたため、\n別名で保存しました:\n'+backupPath.split('/').pop());
+      setUnsaved(false);
+      flashBtn(overwriteBtn);
+      return;
+    }
     await dbxUpload(currentPath,getValue());
+    localStorage.setItem('mdapp_open_time_'+currentPath, Date.now());
     setUnsaved(false);
     flashBtn(overwriteBtn);
   }catch(e){alert('保存エラー: '+e.message);}
