@@ -392,6 +392,31 @@ function makeTheme(dark){
   return EditorView.theme({'&':{background:c.bg,color:c.text,height:'100%'},'.cm-scroller':{overflow:'auto'},'.cm-content':{caretColor:c.cur},'.cm-cursor':{borderLeft:'2px solid '+c.cur},'.cm-selectionBackground':{background:c.sel},'&.cm-focused .cm-selectionBackground':{background:c.selF},'.cm-gutters':{display:'none'},'.cm-activeLine':{background:c.act}},{dark});
 }
 
+
+// ── direct input replacement (prevents IME post-fix duplication) ──
+const directInputReplace = EditorView.inputHandler.of((view, from, to, text, insert) => {
+  const line = view.state.doc.lineAt(from);
+  const atLineStart = from === line.from && to === from;
+  if(!atLineStart) return false;
+
+  const directRules = new Map([
+    ['・', '- '],
+    ['＃ ', '# '],
+    ['＃＃ ', '## '],
+    ['＃＃＃ ', '### '],
+    ['＞ ', '> '],
+  ]);
+  const replacement = directRules.get(text);
+  if(!replacement) return false;
+
+  view.dispatch({
+    changes: {from, to, insert: replacement},
+    selection: {anchor: from + replacement.length},
+    annotations: autoReplaceAnn.of(true),
+  });
+  return true;
+});
+
 // ── editor ──
 let view=null;
 const themeComp=new Compartment();
@@ -411,6 +436,7 @@ function buildEditor(doc=''){
       themeComp.of(makeTheme(isDark)),
       EditorView.lineWrapping,
       liveMarkdown,
+      directInputReplace,
       autoReplace,
       smartBackspaceCleanup,
       EditorView.updateListener.of(u=>{if(u.docChanged){setUnsaved(true);updateStatus();}}),
@@ -520,7 +546,6 @@ function getAutoReplaceSpec(state){
   const line=state.doc.lineAt(sel.head);
   const lt=line.text;
   const rules=[
-    {find:'・', replace:'- ', matchFn:t=>t==='・'},
     {find:'＃ ', replace:'# ', matchFn:t=>t==='＃ '},
     {find:'＃＃ ', replace:'## ', matchFn:t=>t==='＃＃ '},
     {find:'＃＃＃ ', replace:'### ', matchFn:t=>t==='＃＃＃ '},
