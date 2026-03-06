@@ -315,7 +315,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 
 <script type="module">
 import {EditorView,keymap,ViewPlugin,Decoration} from 'https://esm.sh/@codemirror/view@6';
-import {EditorState,Compartment,Prec} from 'https://esm.sh/@codemirror/state@6';
+import {EditorState,Compartment,Prec,Annotation} from 'https://esm.sh/@codemirror/state@6';
 import {markdown} from 'https://esm.sh/@codemirror/lang-markdown@6';
 import {defaultKeymap,historyKeymap,history,undo,redo} from 'https://esm.sh/@codemirror/commands@6';
 import {syntaxHighlighting,HighlightStyle,syntaxTree,ensureSyntaxTree} from 'https://esm.sh/@codemirror/language@6';
@@ -512,39 +512,36 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-// Direct DOM events — bypasses all CM6 composition timing issues
-function tryAutoReplace(){
-  if(!view)return;
-  const st=view.state;
-  const pos=st.selection.main.head;
-  const line=st.doc.lineAt(pos);
+// Synchronous doc-change based replacement to avoid IME timing glitches
+const autoReplaceAnn=Annotation.define();
+function getAutoReplaceSpec(state){
+  const sel=state.selection.main;
+  if(!sel.empty) return null;
+  const line=state.doc.lineAt(sel.head);
   const lt=line.text;
   const rules=[
-    {find:'・',  replace:'- ',  matchFn:t=>t.startsWith('・')},
-    {find:'＃ ',  replace:'# ',  matchFn:t=>t==='＃ '},
+    {find:'・', replace:'- ', matchFn:t=>t==='・'},
+    {find:'＃ ', replace:'# ', matchFn:t=>t==='＃ '},
     {find:'＃＃ ', replace:'## ', matchFn:t=>t==='＃＃ '},
-    {find:'＃＃＃ ',replace:'### ',matchFn:t=>t==='＃＃＃ '},
-    {find:'＞ ',  replace:'> ',  matchFn:t=>t==='＞ '},
+    {find:'＃＃＃ ', replace:'### ', matchFn:t=>t==='＃＃＃ '},
+    {find:'＞ ', replace:'> ', matchFn:t=>t==='＞ '},
   ];
   for(const r of rules){
     if(r.matchFn(lt)){
-      view.dispatch({changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
-        selection:{anchor:line.from+r.replace.length}});
-      return;
+      return {
+        changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
+        selection:{anchor:line.from+r.replace.length},
+        annotations:autoReplaceAnn.of(true),
+      };
     }
   }
+  return null;
 }
-// compositionend fires AFTER IME confirms
-let _arTimer=0;
-function scheduleAutoReplace(ms){
-  clearTimeout(_arTimer);
-  _arTimer=setTimeout(tryAutoReplace,ms);
-}
-cmHost.addEventListener('compositionend',()=>scheduleAutoReplace(30));
-cmHost.addEventListener('input',()=>scheduleAutoReplace(10));
-// keep as CM6 extension too (belt and suspenders)
-const autoReplace=EditorView.domEventHandlers({
-  compositionend(){scheduleAutoReplace(30);}
+const autoReplace=EditorView.updateListener.of(u=>{
+  if(!u.docChanged) return;
+  if(u.transactions.some(tr=>tr.annotation(autoReplaceAnn))) return;
+  const spec=getAutoReplaceSpec(u.state);
+  if(spec) u.view.dispatch(spec);
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
