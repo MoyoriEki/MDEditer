@@ -189,7 +189,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v30</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v31</div>
     </div>
   </div>
 
@@ -534,17 +534,21 @@ function tryAutoReplace(){
     }
   }
 }
-// compositionend fires AFTER IME confirms
+// compositionend only — input event fires during IME intermediate states
 let _arTimer=0;
 function scheduleAutoReplace(ms){
   clearTimeout(_arTimer);
   _arTimer=setTimeout(tryAutoReplace,ms);
 }
-cmHost.addEventListener('compositionend',()=>scheduleAutoReplace(30));
-cmHost.addEventListener('input',()=>scheduleAutoReplace(10));
-// keep as CM6 extension too (belt and suspenders)
+// Listen on document level — CM6's contenteditable may not bubble to cmHost
+document.addEventListener('compositionend',()=>scheduleAutoReplace(50));
+cmHost.addEventListener('beforeinput',(e)=>{
+  if(e.inputType==='insertText'&&e.data&&e.data.includes('・')){
+    scheduleAutoReplace(10);
+  }
+});
 const autoReplace=EditorView.domEventHandlers({
-  compositionend(){scheduleAutoReplace(30);}
+  compositionend(){scheduleAutoReplace(50);}
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
