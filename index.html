@@ -38,11 +38,10 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 #app{display:flex;flex:1;overflow:hidden;padding-bottom:env(safe-area-inset-bottom,0)}
 
 /* ── SIDEBAR ── */
-#sidebar{width:250px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .15s,opacity .15s;text-align:left}
+#sidebar{width:250px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .15s,opacity .15s}
 #sidebar.collapsed{width:0;opacity:0;pointer-events:none}
 
-#sidebar-top{padding:8px 10px;border-bottom:1px solid var(--border);overflow:hidden;text-align:left}
-#sidebar-top-inner{display:flex;align-items:center;gap:4px;float:left}
+#sidebar-top{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px}
 .icon-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:20px;padding:6px 10px;border-radius:2px;transition:color .15s,background .15s;line-height:1;display:flex;align-items:center}
 .icon-btn:hover{color:var(--accent);background:var(--bg3)}
 .icon-btn:active{opacity:.7}
@@ -180,19 +179,17 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
   <!-- SIDEBAR -->
   <div id="sidebar">
     <div id="sidebar-top">
-      <div id="sidebar-top-inner">
-        <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル"><span class="material-icon">add</span></button>
-        <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ"><span class="material-icon">create_new_folder</span></button>
-        <button type="button" class="icon-btn" id="export-btn" title="名前を付けて保存"><span class="material-icon">download</span></button>
-        <button type="button" class="icon-btn" id="refresh-btn" title="更新"><span class="material-icon">refresh</span></button>
-      </div>
+      <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル"><span class="material-icon">add</span></button>
+      <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ"><span class="material-icon">create_new_folder</span></button>
+      <button type="button" class="icon-btn" id="export-btn" title="名前を付けて保存"><span class="material-icon">download</span></button>
+      <button type="button" class="icon-btn" id="refresh-btn" title="更新"><span class="material-icon">refresh</span></button>
     </div>
     <div id="file-tree"><div class="tree-msg">接続してください</div></div>
     <div id="sidebar-bottom">
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v27</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v28</div>
     </div>
   </div>
 
@@ -471,7 +468,10 @@ const liveMarkdown=ViewPlugin.fromClass(class{
       const line=getLine(nf);
       const onCursor=line.number===curLine;
       if(nm.startsWith('ATXHeading')&&headingLine[nm]&&!onCursor){
-        lineDecos.push(headingLine[nm].range(line.from));
+        // verify line actually starts with # (syntax tree can be stale)
+        if(line.text.trimStart().startsWith('#')){
+          lineDecos.push(headingLine[nm].range(line.from));
+        }
       }
       else if(nm==='HeaderMark'&&!onCursor){
         decos.push(dimMark.range(nf,Math.min(nt+1,line.to)));
@@ -510,25 +510,23 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-// queueMicrotask defers dispatch to next tick, condition guard prevents re-trigger
+// setTimeout(0) runs after IME composition ends (unlike queueMicrotask which runs before)
 const autoReplace=EditorView.updateListener.of(u=>{
   if(!u.docChanged)return;
   const st=u.state;
   const pos=st.selection.main.head;
   const line=st.doc.lineAt(pos);
   const lt=line.text;
-  // ・ at line start → replace with "- "
   if(lt.startsWith('・')){
-    queueMicrotask(()=>{
-      if(!view||view.composing)return; // still composing on next tick? skip
+    setTimeout(()=>{
+      if(!view||view.composing)return;
       const cur=view.state.doc.lineAt(view.state.selection.main.head);
       if(!cur.text.startsWith('・'))return;
       view.dispatch({changes:{from:cur.from,to:cur.from+1,insert:'- '},
         selection:{anchor:cur.from+2}});
-    });
+    },0);
     return;
   }
-  // full-width prefix conversions
   const fwRules=[
     {find:'＃ ',  replace:'# '},
     {find:'＃＃ ', replace:'## '},
@@ -537,13 +535,13 @@ const autoReplace=EditorView.updateListener.of(u=>{
   ];
   for(const r of fwRules){
     if(lt===r.find){
-      queueMicrotask(()=>{
+      setTimeout(()=>{
         if(!view||view.composing)return;
         const cur=view.state.doc.lineAt(view.state.selection.main.head);
         if(cur.text!==r.find)return;
         view.dispatch({changes:{from:cur.from,to:cur.from+r.find.length,insert:r.replace},
           selection:{anchor:cur.from+r.replace.length}});
-      });
+      },0);
       return;
     }
   }
