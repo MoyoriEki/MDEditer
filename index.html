@@ -150,6 +150,24 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── LIVE MARKDOWN ── */
+.cm-md-dim{opacity:.25;font-size:.85em}
+.cm-line.cm-md-h1{font-size:1.5em;font-weight:300;color:var(--accent)}
+.cm-line.cm-md-h2{font-size:1.25em;font-weight:300;color:var(--accent)}
+.cm-line.cm-md-h3{font-size:1.1em;font-weight:400;color:var(--accent)}
+.cm-line.cm-md-h4{font-size:1.05em;font-weight:400;color:var(--accent)}
+.cm-line.cm-md-bq{border-left:2px solid var(--accent-dim);padding-left:12px;opacity:.85;font-style:italic}
+.cm-md-hr{text-decoration:line-through;opacity:.2}
+.cm-md-code-bg{background:var(--bg3);border-radius:2px;padding:0 3px}
+
+/* ── TOOLBAR COMPACT (mobile) ── */
+@media(max-width:768px){
+  #toolbar{gap:3px;padding:5px 8px}
+  .tbtn{padding:6px 10px;font-size:12px;letter-spacing:.04em}
+  .tbtn .material-icon{font-size:16px}
+  #toggle-sidebar{padding:2px 4px}
+}
 </style>
 </head>
 <body>
@@ -167,7 +185,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v19</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v20</div>
     </div>
   </div>
 
@@ -292,11 +310,11 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 </div>
 
 <script type="module">
-import {EditorView,keymap} from 'https://esm.sh/@codemirror/view@6';
+import {EditorView,keymap,ViewPlugin,Decoration} from 'https://esm.sh/@codemirror/view@6';
 import {EditorState,Compartment} from 'https://esm.sh/@codemirror/state@6';
 import {markdown} from 'https://esm.sh/@codemirror/lang-markdown@6';
 import {defaultKeymap,historyKeymap,history,undo,redo} from 'https://esm.sh/@codemirror/commands@6';
-import {syntaxHighlighting,HighlightStyle} from 'https://esm.sh/@codemirror/language@6';
+import {syntaxHighlighting,HighlightStyle,syntaxTree} from 'https://esm.sh/@codemirror/language@6';
 import {tags} from 'https://esm.sh/@lezer/highlight@1';
 
 // ── state ──
@@ -386,6 +404,8 @@ function buildEditor(doc=''){
       hlComp.of(syntaxHighlighting(makeHL(isDark))),
       themeComp.of(makeTheme(isDark)),
       EditorView.lineWrapping,
+      liveMarkdown,
+      autoReplace,
       EditorView.updateListener.of(u=>{if(u.docChanged){setUnsaved(true);updateStatus();}}),
     ]}),
     parent:cmHost,
@@ -398,6 +418,106 @@ function reconfigureTheme(){
     hlComp.reconfigure(syntaxHighlighting(makeHL(isDark))),
   ]});
 }
+
+// ── live markdown decorations ──
+const dimMark=Decoration.mark({class:'cm-md-dim'});
+const codeBg=Decoration.mark({class:'cm-md-code-bg'});
+const hrMark=Decoration.mark({class:'cm-md-hr'});
+const headingLine={
+  ATXHeading1:Decoration.line({class:'cm-md-h1'}),
+  ATXHeading2:Decoration.line({class:'cm-md-h2'}),
+  ATXHeading3:Decoration.line({class:'cm-md-h3'}),
+  ATXHeading4:Decoration.line({class:'cm-md-h4'}),
+};
+const bqLine=Decoration.line({class:'cm-md-bq'});
+
+const liveMarkdown=ViewPlugin.fromClass(class{
+  constructor(v){this.decorations=this.build(v);}
+  update(u){if(u.docChanged||u.viewportChanged||u.selectionSet)this.decorations=this.build(u.view);}
+  build(v){
+    const st=v.state;
+    const sel=st.selection.main.head;
+    const curLine=st.doc.lineAt(sel).number;
+    const decos=[];
+    const lineDecos=[];
+    const {from:vFrom,to:vTo}=v.viewport;
+    syntaxTree(st).iterate({from:vFrom,to:vTo,enter(node){
+      const nf=node.from,nt=node.to;
+      const line=st.doc.lineAt(nf).number;
+      const onCursor=line===curLine;
+      const nm=node.name;
+      // headings
+      if(nm.startsWith('ATXHeading')&&headingLine[nm]&&!onCursor){
+        lineDecos.push(headingLine[nm].range(st.doc.lineAt(nf).from));
+      }
+      // dim # marks
+      if(nm==='HeaderMark'&&!onCursor){
+        // dim mark + trailing space
+        const end=Math.min(nt+1,st.doc.lineAt(nf).to);
+        decos.push(dimMark.range(nf,end));
+      }
+      // bold/italic markers
+      if(nm==='EmphasisMark'&&!onCursor){
+        decos.push(dimMark.range(nf,nt));
+      }
+      // inline code
+      if(nm==='InlineCode'&&!onCursor){
+        decos.push(codeBg.range(nf,nt));
+      }
+      if(nm==='CodeMark'&&!onCursor){
+        decos.push(dimMark.range(nf,nt));
+      }
+      // blockquote
+      if(nm==='Blockquote'){
+        // apply to each line in the blockquote
+        for(let pos=nf;pos<=nt;){
+          const l=st.doc.lineAt(pos);
+          if(l.number!==curLine) lineDecos.push(bqLine.range(l.from));
+          pos=l.to+1;
+        }
+      }
+      // quote marks (>)
+      if(nm==='QuoteMark'&&!onCursor){
+        const end=Math.min(nt+1,st.doc.lineAt(nf).to);
+        decos.push(dimMark.range(nf,end));
+      }
+      // link brackets
+      if(nm==='LinkMark'&&!onCursor){
+        decos.push(dimMark.range(nf,nt));
+      }
+      // URL in links
+      if(nm==='URL'&&!onCursor){
+        decos.push(dimMark.range(nf,nt));
+      }
+      // horizontal rule
+      if(nm==='HorizontalRule'&&!onCursor){
+        decos.push(hrMark.range(nf,nt));
+      }
+    }});
+    return Decoration.set([...decos,...lineDecos],true);
+  }
+},{decorations:v=>v.decorations});
+
+// ── auto-replace (・→ - ) ──
+const autoReplace=EditorView.inputHandler.of((view,from,to,text)=>{
+  const line=view.state.doc.lineAt(from);
+  const before=view.state.sliceDoc(line.from,from)+text;
+  const replacements=[
+    {pattern:/^・$/,  replace:'- '},
+    {pattern:/^＃ $/,  replace:'# '},
+    {pattern:/^＃＃ $/, replace:'## '},
+    {pattern:/^＃＃＃ $/,replace:'### '},
+    {pattern:/^＞ $/,  replace:'> '},
+  ];
+  for(const r of replacements){
+    if(r.pattern.test(before)){
+      view.dispatch({changes:{from:line.from,to,insert:r.replace},
+        selection:{anchor:line.from+r.replace.length}});
+      return true;
+    }
+  }
+  return false;
+});
 function getValue(){return view?view.state.doc.toString():'';}
 function setValue(text){
   if(!view)return;
