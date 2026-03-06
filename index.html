@@ -190,7 +190,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <div id="dbx-status">未接続</div>
       <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v22</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v23</div>
     </div>
   </div>
 
@@ -316,7 +316,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 
 <script type="module">
 import {EditorView,keymap,ViewPlugin,Decoration} from 'https://esm.sh/@codemirror/view@6';
-import {EditorState,Compartment} from 'https://esm.sh/@codemirror/state@6';
+import {EditorState,Compartment,Prec} from 'https://esm.sh/@codemirror/state@6';
 import {markdown} from 'https://esm.sh/@codemirror/lang-markdown@6';
 import {defaultKeymap,historyKeymap,history,undo,redo} from 'https://esm.sh/@codemirror/commands@6';
 import {syntaxHighlighting,HighlightStyle,syntaxTree} from 'https://esm.sh/@codemirror/language@6';
@@ -404,13 +404,15 @@ function buildEditor(doc=''){
   view=new EditorView({
     state:EditorState.create({doc,extensions:[
       history(),
-      keymap.of([{key:'Backspace',run:smartBackspace},...defaultKeymap,...historyKeymap,{key:'Mod-s',run(){saveOverwrite();return true;}}]),
+      Prec.high(keymap.of([{key:'Backspace',run:smartBackspaceCmd}])),
+      keymap.of([...defaultKeymap,...historyKeymap,{key:'Mod-s',run(){saveOverwrite();return true;}}]),
       markdown(),
       hlComp.of(syntaxHighlighting(makeHL(isDark))),
       themeComp.of(makeTheme(isDark)),
       EditorView.lineWrapping,
       liveMarkdown,
       autoReplace,
+      smartBackspaceCleanup,
       EditorView.updateListener.of(u=>{if(u.docChanged){setUnsaved(true);updateStatus();}}),
     ]}),
     parent:cmHost,
@@ -531,15 +533,14 @@ const autoReplace=EditorView.inputHandler.of((view,from,to,text)=>{
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
-// Fires when cursor is anywhere inside the prefix (pos 1 or 2 for "- ")
-function smartBackspace(v){
+// keymap command for PC (fires on Backspace keydown)
+function smartBackspaceCmd(v){
   const sel=v.state.selection.main;
   if(!sel.empty) return false;
   const line=v.state.doc.lineAt(sel.head);
   const offset=sel.head-line.from;
   if(offset===0) return false;
   const lineText=line.text;
-  // longest match first
   const prefixes=['#### ','### ','## ','# ','- ','> '];
   for(const p of prefixes){
     if(lineText.startsWith(p)&&offset<=p.length){
@@ -547,13 +548,24 @@ function smartBackspace(v){
       return true;
     }
   }
-  // also catch lone space after prefix was partially deleted (e.g. " text" from broken "- text")
-  if(offset===1&&lineText.startsWith(' ')){
-    v.dispatch({changes:{from:line.from,to:line.from+1}});
-    return true;
-  }
   return false;
 }
+// iOS fallback: clean orphaned leading space after default BS deletes the dash
+let _sbLock=false;
+const smartBackspaceCleanup=EditorView.updateListener.of(u=>{
+  if(!u.docChanged||_sbLock)return;
+  let isDeletion=false;
+  u.changes.iterChanges((fA,tA,fB,tB)=>{if(tA>fA&&tB===fB) isDeletion=true;});
+  if(!isDeletion)return;
+  const pos=u.state.selection.main.head;
+  const line=u.state.doc.lineAt(pos);
+  const offset=pos-line.from;
+  if(offset<=1&&line.text.length>0&&line.text[0]===' '){
+    _sbLock=true;
+    u.view.dispatch({changes:{from:line.from,to:line.from+1}});
+    _sbLock=false;
+  }
+});
 function getValue(){return view?view.state.doc.toString():'';}
 function setValue(text){
   if(!view)return;
