@@ -36,8 +36,8 @@
 –accent:#7a5a22;–accent-dim:#c8a050;–danger:#b03030;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{background:var(–bg);height:100%;height:100dvh;overflow:hidden}
-body{height:100%;height:100dvh;overflow:hidden;background:var(–bg);color:var(–text);font-family:‘IBM Plex Mono’,monospace;display:flex;flex-direction:column;touch-action:manipulation}
+html{background:var(–bg);height:100%;height:100dvh;overflow:hidden;position:fixed;width:100%;top:0;left:0}
+body{height:100%;height:100dvh;overflow:hidden;background:var(–bg);color:var(–text);font-family:‘IBM Plex Mono’,monospace;display:flex;flex-direction:column;touch-action:manipulation;position:fixed;width:100%;top:0;left:0}
 #app{display:flex;flex:1;overflow:hidden;padding-bottom:env(safe-area-inset-bottom,0)}
 
 /* ── SIDEBAR ── */
@@ -1492,18 +1492,9 @@ if(window.visualViewport){
     const curH=window.visualViewport.height;
     document.body.style.height=curH+'px';
     // Detect keyboard opening (significant height decrease)
-    const kbJustOpened=curH<_fullH*0.8&&_prevVVH>=_fullH*0.8;
+    const kbJustOpened=curH<_fullH*0.85&&_prevVVH>=_fullH*0.85;
     _prevVVH=curH;
-    // On iOS only: when keyboard opens, Safari may scroll the document itself.
-    // Reset that unwanted document scroll, but only at the moment keyboard appears.
-    if(kbJustOpened&&isIOS){
-      requestAnimationFrame(()=>{
-        window.scrollTo(0,0);
-        document.documentElement.scrollTop=0;
-        document.body.scrollTop=0;
-      });
-    }
-    // After keyboard open, scroll CodeMirror cursor into view
+    // After keyboard open, ensure CodeMirror cursor is visible
     if(kbJustOpened&&view&&view.hasFocus){
       requestAnimationFrame(()=>{
         if(view){
