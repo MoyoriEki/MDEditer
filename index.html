@@ -36,8 +36,8 @@
 –accent:#7a5a22;–accent-dim:#c8a050;–danger:#b03030;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{background:var(–bg);height:100%;height:100dvh;overflow:hidden;position:fixed;width:100%;top:0;left:0}
-body{height:100%;height:100dvh;overflow:hidden;background:var(–bg);color:var(–text);font-family:‘IBM Plex Mono’,monospace;display:flex;flex-direction:column;touch-action:manipulation;position:fixed;width:100%;top:0;left:0}
+html{background:var(–bg);height:100%;height:100dvh;overflow:hidden}
+body{height:100%;height:100dvh;overflow:hidden;background:var(–bg);color:var(–text);font-family:‘IBM Plex Mono’,monospace;display:flex;flex-direction:column;touch-action:manipulation}
 #app{display:flex;flex:1;overflow:hidden;padding-bottom:env(safe-area-inset-bottom,0)}
 
 /* ── SIDEBAR ── */
@@ -78,7 +78,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(–bg);color:var(�
 /* ── MAIN ── */
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
-#toolbar{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(–border);background:var(–bg);flex-shrink:0;flex-wrap:nowrap;min-height:44px;overflow:hidden;touch-action:manipulation}
+#toolbar{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(–border);background:var(–bg);flex-shrink:0;flex-wrap:nowrap;min-height:44px;overflow:hidden}
 #toggle-sidebar{background:none;border:none;cursor:pointer;color:var(–text-mid);font-size:22px;padding:4px 6px;transition:color .15s;flex-shrink:0;line-height:1;margin-right:0}
 #toggle-sidebar:hover{color:var(–accent)}
 #filename-display{flex:1;font-size:14px;color:var(–text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px;margin-right:auto;cursor:default}
@@ -106,7 +106,7 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 /* ── EDITOR ── */
 #editor-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column}
 #cm-host{flex:1;overflow:hidden;display:flex;flex-direction:column}
-#cm-host .cm-editor{flex:1;height:100% !important;background:var(–bg) !important;outline:none;touch-action:manipulation}
+#cm-host .cm-editor{flex:1;height:100% !important;background:var(–bg) !important;outline:none}
 #cm-host .cm-scroller{line-height:1.8;padding:32px 64px;overflow:auto}
 @media(max-width:768px){#cm-host .cm-scroller{padding:16px 18px !important}#preview{padding:20px 18px !important}}
 #cm-host .cm-content{caret-color:var(–accent)}
@@ -116,7 +116,7 @@ transition:all .12s;text-transform:uppercase;white-space:nowrap;flex-shrink:0;
 #cm-host .cm-gutters{display:none !important}
 #cm-host .cm-activeLine{background:rgba(200,169,110,.022) !important}
 
-#preview{display:none;flex:1;overflow-y:auto;padding:40px 64px;line-height:1.9;color:var(–text);background:var(–bg);touch-action:manipulation}
+#preview{display:none;flex:1;overflow-y:auto;padding:40px 64px;line-height:1.9;color:var(–text);background:var(–bg)}
 #preview.v{display:block}
 #preview h1,#preview h2,#preview h3{font-family:‘IBM Plex Mono’,monospace;font-weight:300;color:var(–accent);margin:2em 0 .6em}
 #preview h1{font-size:1.55em}#preview h2{font-size:1.2em}#preview h3{font-size:1.05em}
@@ -1482,35 +1482,27 @@ applyTheme(cfg.theme!=='light');
 // Only update when no touches active to avoid interfering with text selection
 if(window.visualViewport){
   let _activeTouches=0;
-  let _prevVVH=window.visualViewport.height;
-  const _fullH=window.visualViewport.height;
   document.addEventListener('touchstart',()=>{_activeTouches++;},{passive:true});
   document.addEventListener('touchend',()=>{_activeTouches=Math.max(0,_activeTouches-1);},{passive:true});
   document.addEventListener('touchcancel',()=>{_activeTouches=Math.max(0,_activeTouches-1);},{passive:true});
-
-  function applyViewportHeight(){
-    const curH=window.visualViewport.height;
-    document.body.style.height=curH+'px';
-    // Detect keyboard opening (significant height decrease)
-    const kbJustOpened=curH<_fullH*0.85&&_prevVVH>=_fullH*0.85;
-    _prevVVH=curH;
-    // After keyboard open, ensure CodeMirror cursor is visible
-    if(kbJustOpened&&view&&view.hasFocus){
-      requestAnimationFrame(()=>{
-        if(view){
-          view.dispatch({effects:EditorView.scrollIntoView(view.state.selection.main.head,{y:'nearest'})});
-        }
-      });
-    }
-  }
-
   window.visualViewport.addEventListener('resize',()=>{
-    if(_activeTouches<=0) applyViewportHeight();
+    if(_activeTouches<=0){
+      document.body.style.height=window.visualViewport.height+'px';
+    }
+  });
+  // Counteract iOS Safari scrolling the html element when keyboard opens.
+  // visualViewport 'scroll' fires ONLY when Safari shifts the viewport itself,
+  // NOT when the user scrolls inside .cm-scroller — so this is safe.
+  window.visualViewport.addEventListener('scroll',()=>{
+    if(window.visualViewport.offsetTop>0) window.scrollTo(0,0);
   });
   // Also run once after all touches end to catch deferred changes
   document.addEventListener('touchend',()=>{
     setTimeout(()=>{
-      if(_activeTouches<=0&&window.visualViewport) applyViewportHeight();
+      if(_activeTouches<=0&&window.visualViewport){
+        document.body.style.height=window.visualViewport.height+'px';
+        if(window.visualViewport.offsetTop>0) window.scrollTo(0,0);
+      }
     },200);
   },{passive:true});
 }
