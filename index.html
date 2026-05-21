@@ -479,6 +479,7 @@ function buildEditor(doc=''){
       EditorView.lineWrapping,
       liveMarkdown,
       autoReplace,
+      autoReplaceUpdate,
       smartBackspaceCleanup,
       EditorView.updateListener.of(u=>{if(u.docChanged){setUnsaved(true);updateStatus();scheduleAutoSave();}}),
     ]}),
@@ -616,6 +617,19 @@ cmHost.addEventListener('beforeinput',(e)=>{
 });
 const autoReplace=EditorView.domEventHandlers({
   compositionend(){scheduleAutoReplace(50);}
+});
+// Primary trigger: fire after CM6 has actually applied any doc change.
+// Browser events (compositionend / beforeinput) can race with CM6's async
+// composition apply on Android Chrome, leaving line.text stale when the
+// setTimeout above fires. updateListener is guaranteed to run post-update.
+let _arLock=false;
+const autoReplaceUpdate=EditorView.updateListener.of(u=>{
+  if(!u.docChanged||_arLock)return;
+  let hasInsert=false;
+  u.changes.iterChanges((fA,tA,fB,tB,inserted)=>{if(inserted.length>0)hasInsert=true;});
+  if(!hasInsert)return;
+  _arLock=true;
+  try{tryAutoReplace();}finally{_arLock=false;}
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
