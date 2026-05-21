@@ -1,22 +1,32 @@
 {
-  "name": "md editor",
-  "short_name": "md",
+  "name": "ムーンライター",
+  "short_name": "ムーンライター",
   "description": "Dropbox連携Markdownエディタ",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0e0e0e",
   "theme_color": "#0e0e0e",
   "orientation": "any",
+  "lang": "ja",
   "icons": [
     {
-      "src": "https://via.placeholder.com/192x192/0e0e0e/c8a96e?text=md",
+      "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "https://via.placeholder.com/512x512/0e0e0e/c8a96e?text=md",
+      "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
