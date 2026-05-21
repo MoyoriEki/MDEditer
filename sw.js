@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mdediter-v1';
+const CACHE_NAME = 'mdediter-v2';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -29,6 +29,25 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  const isHTML = req.mode === 'navigate' ||
+    (req.headers.get('accept') || '').includes('text/html');
+
+  if (isHTML) {
+    // Network-first for HTML so code updates show up immediately;
+    // fall back to cache only when offline.
+    event.respondWith(
+      fetch(req).then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => {});
+        }
+        return res;
+      }).catch(() => caches.match(req).then((c) => c || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Stale-while-revalidate for everything else (icons, manifest, etc.)
   event.respondWith(
     caches.match(req).then((cached) => {
       const network = fetch(req).then((res) => {
