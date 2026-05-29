@@ -66,6 +66,26 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 .tree-children{display:none}
 .tree-children.open{display:block}
 
+/* ── BOOKMARKS ── */
+#bookmarks{flex-shrink:0;border-bottom:1px solid var(--border);padding:4px 0;display:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;max-height:40%;overflow-y:auto}
+#bookmarks.has-items{display:block}
+.bm-header{padding:8px 14px 4px;font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-transform:uppercase;display:flex;align-items:center;gap:5px}
+.bm-header .material-icon{font-size:12px}
+.bm-row{display:flex;align-items:center;gap:5px;padding:9px 12px 9px 6px;font-size:14px;cursor:pointer;color:var(--text-mid);transition:color .1s,background .1s;white-space:nowrap;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border-left:2px solid transparent}
+.bm-row:hover{color:var(--text);background:var(--bg3)}
+.bm-row.active{color:var(--accent);border-left-color:var(--accent)}
+.bm-row.dragging{opacity:.55;background:var(--bg3)}
+.bm-handle{font-size:16px;color:var(--text-dim);cursor:grab;flex-shrink:0;touch-action:none;display:flex;align-items:center}
+.bm-handle:active{cursor:grabbing}
+.bm-icon{font-size:13px;flex-shrink:0;color:var(--accent-dim)}
+.bm-name{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.bm-actions{display:none;gap:2px;flex-shrink:0}
+.bm-row:hover .bm-actions{display:flex}
+.bm-act-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:12px;padding:1px 3px;border-radius:2px;transition:color .1s;line-height:1;font-family:inherit}
+.bm-act-btn:hover{color:var(--danger)}
+.icon-btn.on{color:var(--accent)}
+.icon-btn.on .material-icon{font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24}
+
 #sidebar-bottom{border-top:1px solid var(--border);padding:12px 14px;display:flex;flex-direction:column;gap:8px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 #dbx-status{font-size:10px;letter-spacing:.08em;color:var(--text-dim)}
 #dbx-status.on{color:var(--accent)}
@@ -206,14 +226,14 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <button type="button" class="icon-btn sidebar-close-btn" id="sidebar-close" title="サイドバーを閉じる"><span class="material-icon">close</span></button>
       <button type="button" class="icon-btn" id="new-file-btn" title="新規ファイル"><span class="material-icon">add</span></button>
       <button type="button" class="icon-btn" id="new-folder-btn" title="新規フォルダ"><span class="material-icon">create_new_folder</span></button>
+      <button type="button" class="icon-btn" id="bookmark-add-btn" title="現在のファイルをブックマーク"><span class="material-icon">star</span></button>
       <button type="button" class="icon-btn" id="export-btn" title="名前を付けて保存"><span class="material-icon">download</span></button>
     </div>
+    <div id="bookmarks"></div>
     <div id="file-tree"><div class="tree-msg">接続してください</div></div>
     <div id="sidebar-bottom">
-      <div id="dbx-status">未接続</div>
-      <button type="button" id="dbx-connect-btn">Dropbox 接続</button>
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v3.4</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v3.5</div>
     </div>
   </div>
 
@@ -239,26 +259,6 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <span id="st-chars">—</span>
       <span id="st-lines">—</span>
       <span id="st-mode">—</span>
-    </div>
-  </div>
-</div>
-
-<!-- Dropbox設定モーダル -->
-<div class="modal-overlay" id="dbx-modal">
-  <div class="modal-box">
-    <h3>Dropbox 設定</h3>
-    <p>
-      <a href="https://www.dropbox.com/developers/apps" target="_blank" style="color:var(--accent)">dropbox.com/developers/apps</a> でアプリを作成。<br>
-      Redirect URI にこのページの URL を設定。<br>
-      Permissions: <code style="color:#9ec49a">files.metadata.read / files.content.read / files.content.write</code>
-    </p>
-    <label>App Key</label>
-    <input id="appkey-input" type="text" placeholder="xxxxxxxxxxxxxxx">
-    <label>フォルダパス（例: /$md関連 ）空白でルート</label>
-    <input id="dbxpath-input" type="text" placeholder="/$md関連">
-    <div class="modal-actions">
-      <button type="button" id="dbx-modal-cancel">キャンセル</button>
-      <button type="button" id="dbx-modal-ok" class="primary">接続する</button>
     </div>
   </div>
 </div>
@@ -302,6 +302,13 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
       <option value="2.0">2.0</option>
       <option value="2.2">2.2</option>
     </select>
+    <label>Dropbox接続</label>
+    <div id="cfg-dbx-status" style="font-size:11px;letter-spacing:.06em;color:var(--text-dim);margin-bottom:8px">未接続</div>
+    <input id="cfg-appkey" type="text" placeholder="App Key" style="margin-bottom:8px">
+    <button type="button" id="cfg-dbx-connect" style="width:100%;background:none;border:1px solid var(--border2);color:var(--text-mid);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;padding:8px;border-radius:2px;text-transform:uppercase;transition:all .15s">Dropbox 接続</button>
+    <p style="font-size:10px;margin-top:6px;margin-bottom:0">
+      <a href="https://www.dropbox.com/developers/apps" target="_blank" style="color:var(--accent)">dropbox.com/developers/apps</a> でアプリを作成し、Redirect URI にこのページの URL を設定。Permissions: <code style="color:#9ec49a">files.metadata.read / files.content.read / files.content.write</code>
+    </p>
     <label>Dropboxフォルダパス</label>
     <input id="cfg-path" type="text" placeholder="/$md関連">
     <label>自動保存</label>
@@ -369,6 +376,8 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 
 <!-- コンテキストメニュー（ファイル/フォルダ用） -->
 <div id="ctx-menu">
+  <button type="button" class="ctx-item" id="ctx-bookmark" style="display:none">ブックマークに追加</button>
+  <button type="button" class="ctx-item" id="ctx-unbookmark" style="display:none">ブックマーク解除</button>
   <button type="button" class="ctx-item" id="ctx-rename">名前を変更</button>
   <button type="button" class="ctx-item danger" id="ctx-delete">削除</button>
 </div>
@@ -402,8 +411,8 @@ cfg = {font:"'IBM Plex Mono',monospace", previewFont:"'Spectral',serif", size:16
 // ── elements ──
 const sidebar       = document.getElementById('sidebar');
 const fileTree      = document.getElementById('file-tree');
-const dbxStatus     = document.getElementById('dbx-status');
-const dbxConnectBtn = document.getElementById('dbx-connect-btn');
+const dbxStatus     = document.getElementById('cfg-dbx-status');
+const dbxConnectBtn = document.getElementById('cfg-dbx-connect');
 const emptyState    = document.getElementById('empty-state');
 const cmHost        = document.getElementById('cm-host');
 const previewEl     = document.getElementById('preview');
@@ -418,13 +427,10 @@ const udot          = document.getElementById('unsaved-dot');
 const stC           = document.getElementById('st-chars');
 const stL           = document.getElementById('st-lines');
 const stM           = document.getElementById('st-mode');
-const dbxModal      = document.getElementById('dbx-modal');
 const settingsModal = document.getElementById('settings-modal');
 const newfileModal  = document.getElementById('newfile-modal');
 const newfolderModal= document.getElementById('newfolder-modal');
 const renameModal   = document.getElementById('rename-modal');
-const akInput       = document.getElementById('appkey-input');
-const dpInput       = document.getElementById('dbxpath-input');
 
 // ── apply cfg ──
 function applyFontCfg(){
@@ -678,7 +684,6 @@ function setValue(text){
 // any remaining inputs/selects to disabled while CM editor is focused.
 const isIOS=/iPad|iPhone/.test(navigator.userAgent);
 const modalOverlays=[
-  document.getElementById('dbx-modal'),
   document.getElementById('settings-modal'),
   document.getElementById('newfile-modal'),
   document.getElementById('newfolder-modal'),
@@ -941,12 +946,12 @@ function renderEntries(containerEl, entries, parentPath){
     const label=document.createElement('span'); label.className='tree-name'; label.textContent=folder.name;
     const actions=document.createElement('span'); actions.className='tree-actions';
     const delBtn=document.createElement('button'); delBtn.className='tree-act-btn'; delBtn.textContent='×'; delBtn.title='削除';
-    delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+folder.name+'" を削除しますか？（中身ごと削除されます）')){try{await dbxDelete(folder.path_display);row.remove();children.remove();}catch(e){alert('エラー: '+e.message);}}};
+    delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+folder.name+'" を削除しますか？（中身ごと削除されます）')){try{await dbxDelete(folder.path_display);removeBookmarksUnder(folder.path_display);row.remove();children.remove();}catch(e){alert('エラー: '+e.message);}}};
     actions.append(delBtn);
     row.append(arrow,icon,label,actions);
     // context menu (right-click + long-press)
-    row.addEventListener('contextmenu',(e)=>{e.preventDefault();e.stopPropagation();showCtxMenu(e.clientX,e.clientY,folder.path_display,folder.name,label,row);});
-    setupLongPress(row,folder.path_display,folder.name,label,row);
+    row.addEventListener('contextmenu',(e)=>{e.preventDefault();e.stopPropagation();showCtxMenu(e.clientX,e.clientY,folder.path_display,folder.name,label,row,{isFile:false});});
+    setupLongPress(row,folder.path_display,folder.name,label,row,{isFile:false});
 
     const children=document.createElement('div');
     children.className='tree-children';
@@ -967,16 +972,17 @@ function renderEntries(containerEl, entries, parentPath){
   for(const file of files){
     const row=document.createElement('div');
     row.className='tree-row tree-file';
+    row.dataset.path=file.path_display;
     const icon=document.createElement('span'); icon.className='tree-icon'; icon.textContent='·';
     const label=document.createElement('span'); label.className='tree-name'; label.textContent=file.name;
     const actions=document.createElement('span'); actions.className='tree-actions';
     const delBtn=document.createElement('button'); delBtn.className='tree-act-btn'; delBtn.textContent='×'; delBtn.title='削除';
-    delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+file.name+'" を削除しますか？')){try{await dbxDelete(file.path_display);if(currentPath===file.path_display){currentPath=null;fnDisplay.textContent='—';fnDisplay.classList.remove('editable');cmHost.style.display='none';emptyState.classList.remove('hidden');}row.remove();}catch(e){alert('エラー: '+e.message);}}};
+    delBtn.onclick=async(e)=>{e.stopPropagation();if(confirm('"'+file.name+'" を削除しますか？')){try{await dbxDelete(file.path_display);removeBookmark(file.path_display);if(currentPath===file.path_display){currentPath=null;fnDisplay.textContent='—';fnDisplay.classList.remove('editable');cmHost.style.display='none';emptyState.classList.remove('hidden');updateBookmarkBtn();}row.remove();}catch(e){alert('エラー: '+e.message);}}};
     actions.append(delBtn);
     row.append(icon,label,actions);
     // context menu (right-click + long-press)
-    row.addEventListener('contextmenu',(e)=>{e.preventDefault();e.stopPropagation();showCtxMenu(e.clientX,e.clientY,file.path_display,file.name,label,row);});
-    setupLongPress(row,file.path_display,file.name,label,row);
+    row.addEventListener('contextmenu',(e)=>{e.preventDefault();e.stopPropagation();showCtxMenu(e.clientX,e.clientY,file.path_display,file.name,label,row,{isFile:true});});
+    setupLongPress(row,file.path_display,file.name,label,row,{isFile:true});
     // touchend for mobile (avoid double-tap delay)
     let _touchMoved=false;
     row.addEventListener('touchstart',()=>{_touchMoved=false;},{passive:true});
@@ -991,9 +997,110 @@ function renderEntries(containerEl, entries, parentPath){
   }
 }
 
+// ── bookmarks ──
+const bookmarksEl=document.getElementById('bookmarks');
+const bookmarkAddBtn=document.getElementById('bookmark-add-btn');
+function loadBookmarks(){try{return JSON.parse(localStorage.getItem('mdapp_bookmarks')||'[]');}catch(e){return [];}}
+function saveBookmarks(arr){localStorage.setItem('mdapp_bookmarks',JSON.stringify(arr));}
+function isBookmarked(path){return loadBookmarks().some(b=>b.path===path);}
+function addBookmark(path,name){const arr=loadBookmarks();if(arr.some(b=>b.path===path))return;arr.push({path,name});saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
+function removeBookmark(path){const arr=loadBookmarks().filter(b=>b.path!==path);saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
+function removeBookmarksUnder(folderPath){const pre=folderPath+'/';const arr=loadBookmarks().filter(b=>!b.path.startsWith(pre)&&b.path!==folderPath);saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
+function updateBookmarkBtn(){const on=!!(currentPath&&isBookmarked(currentPath));bookmarkAddBtn.classList.toggle('on',on);bookmarkAddBtn.title=on?'ブックマーク解除':'現在のファイルをブックマーク';}
+function persistBookmarkOrder(){
+  const order=[...bookmarksEl.querySelectorAll('.bm-row')].map(r=>r.dataset.path);
+  const arr=loadBookmarks();
+  arr.sort((a,b)=>order.indexOf(a.path)-order.indexOf(b.path));
+  saveBookmarks(arr);
+}
+function setupBookmarkDrag(row,handle){
+  handle.addEventListener('pointerdown',(e)=>{
+    e.preventDefault();e.stopPropagation();
+    const startY=e.clientY;let dragging=false;
+    try{handle.setPointerCapture(e.pointerId);}catch(_){}
+    const onMove=(ev)=>{
+      const y=ev.clientY;
+      if(!dragging){if(Math.abs(y-startY)<4)return;dragging=true;row._dragging=true;row.classList.add('dragging');}
+      const others=[...bookmarksEl.querySelectorAll('.bm-row')].filter(r=>r!==row);
+      let placed=false;
+      for(const other of others){const r=other.getBoundingClientRect();if(y<r.top+r.height/2){bookmarksEl.insertBefore(row,other);placed=true;break;}}
+      if(!placed)bookmarksEl.appendChild(row);
+    };
+    const onUp=()=>{
+      try{handle.releasePointerCapture(e.pointerId);}catch(_){}
+      handle.removeEventListener('pointermove',onMove);
+      handle.removeEventListener('pointerup',onUp);
+      handle.removeEventListener('pointercancel',onUp);
+      row.classList.remove('dragging');
+      if(dragging)persistBookmarkOrder();
+      setTimeout(()=>{row._dragging=false;},60);
+    };
+    handle.addEventListener('pointermove',onMove);
+    handle.addEventListener('pointerup',onUp);
+    handle.addEventListener('pointercancel',onUp);
+  });
+}
+function renderBookmarks(){
+  const arr=loadBookmarks();
+  bookmarksEl.innerHTML='';
+  bookmarksEl.classList.toggle('has-items',arr.length>0);
+  if(arr.length===0)return;
+  const header=document.createElement('div');header.className='bm-header';
+  const hicon=document.createElement('span');hicon.className='material-icon';hicon.textContent='star';
+  const htext=document.createElement('span');htext.textContent='ブックマーク';
+  header.append(hicon,htext);
+  bookmarksEl.appendChild(header);
+  for(const bm of arr){
+    const row=document.createElement('div');
+    row.className='bm-row'; row.dataset.path=bm.path;
+    if(currentPath===bm.path) row.classList.add('active');
+    const handle=document.createElement('span');handle.className='bm-handle material-icon';handle.textContent='drag_indicator';handle.title='ドラッグで並び替え';
+    const icon=document.createElement('span');icon.className='bm-icon material-icon';icon.textContent='star';
+    const label=document.createElement('span');label.className='bm-name';label.textContent=bm.name;
+    const actions=document.createElement('span');actions.className='bm-actions';
+    const rmBtn=document.createElement('button');rmBtn.className='bm-act-btn';rmBtn.textContent='×';rmBtn.title='ブックマーク解除';
+    rmBtn.onclick=(e)=>{e.stopPropagation();removeBookmark(bm.path);};
+    actions.append(rmBtn);
+    row.append(handle,icon,label,actions);
+    row.addEventListener('click',()=>{if(row._dragging)return;openBookmark(bm.path,bm.name);});
+    row.addEventListener('contextmenu',(e)=>{e.preventDefault();e.stopPropagation();showCtxMenu(e.clientX,e.clientY,bm.path,bm.name,label,null,{isFile:true});});
+    setupLongPress(row,bm.path,bm.name,label,null,{isFile:true});
+    setupBookmarkDrag(row,handle);
+    bookmarksEl.appendChild(row);
+  }
+}
+function openBookmark(path,name){
+  if(!dbxToken){alert('先にDropboxへ接続してください');return;}
+  const treeRow=fileTree.querySelector('.tree-file[data-path="'+CSS.escape(path)+'"]');
+  openFile(path,name,treeRow||null);
+}
+bookmarkAddBtn.addEventListener('click',()=>{
+  if(!currentPath){alert('ファイルを開いてからブックマークしてください');return;}
+  const name=currentPath.split('/').pop();
+  if(isBookmarked(currentPath)) removeBookmark(currentPath);
+  else addBookmark(currentPath,name);
+});
+
+// ── URL hash navigation ──
+function updateHash(path){
+  const h='#path='+encodeURIComponent(path);
+  if(location.hash!==h){history.replaceState(null,'',location.pathname+h);}
+}
+function parseHash(){
+  const m=location.hash.match(/[#&]path=([^&]+)/);
+  try{return m?decodeURIComponent(m[1]):null;}catch(e){return null;}
+}
+window.addEventListener('hashchange',()=>{
+  const p=parseHash();
+  if(p&&p!==currentPath&&dbxToken){
+    const treeRow=fileTree.querySelector('.tree-file[data-path="'+CSS.escape(p)+'"]');
+    openFile(p,p.split('/').pop(),treeRow||null,true);
+  }
+});
+
 // ── file ops ──
 let activeRow=null;
-async function openFile(path,name,row){
+async function openFile(path,name,row,silent){
   if(unsaved&&currentPath){
     // 自動保存してから切り替え
     try{await dbxUpload(currentPath,getValue());localStorage.setItem('mdapp_open_time_'+currentPath,Date.now());}catch(e){console.warn('切替時の自動保存失敗',e);}
@@ -1013,11 +1120,14 @@ async function openFile(path,name,row){
     if(!view) buildEditor(text); else setValue(text);
     setUnsaved(false); updateStatus(); stM.textContent='編集';
     if(activeRow) activeRow.classList.remove('active');
-    activeRow=row; row.classList.add('active');
+    activeRow=row; if(row) row.classList.add('active');
+    updateHash(path);
+    updateBookmarkBtn();
+    bookmarksEl.querySelectorAll('.bm-row').forEach(r=>r.classList.toggle('active',r.dataset.path===path));
     if(window.innerWidth<=768){sidebarOpen=false;sidebar.classList.add('collapsed');}
     if(!isPreview) view.focus();
     if(isPreview) renderPreview();
-  }catch(e){alert('読み込みエラー: '+e.message);}
+  }catch(e){if(silent)console.warn('読み込み失敗',e);else alert('読み込みエラー: '+e.message);}
 }
 
 async function saveOverwrite(){
@@ -1070,10 +1180,15 @@ function exportFile(){
 // ── context menu ──
 const ctxMenu=document.getElementById('ctx-menu');
 let _ctxPath=null,_ctxName=null,_ctxLabel=null,_ctxRow=null;
-function showCtxMenu(x,y,path,name,labelEl,rowEl){
+function showCtxMenu(x,y,path,name,labelEl,rowEl,opts={}){
   _ctxPath=path;_ctxName=name;_ctxLabel=labelEl;_ctxRow=rowEl;
+  const marked=isBookmarked(path);
+  const ab=document.getElementById('ctx-bookmark');
+  const ub=document.getElementById('ctx-unbookmark');
+  ub.style.display=marked?'block':'none';
+  ab.style.display=(opts.isFile&&!marked)?'block':'none';
   ctxMenu.style.left=Math.min(x,window.innerWidth-160)+'px';
-  ctxMenu.style.top=Math.min(y,window.innerHeight-80)+'px';
+  ctxMenu.style.top=Math.min(y,window.innerHeight-120)+'px';
   ctxMenu.classList.add('v');
 }
 // sidebar empty-area context menu
@@ -1141,6 +1256,16 @@ document.getElementById('ctx-new-folder').addEventListener('click',(e)=>{
   newfolderModal.classList.add('v');
   setTimeout(()=>document.getElementById('newfolder-input').focus(),50);
 });
+document.getElementById('ctx-bookmark').addEventListener('click',(e)=>{
+  e.stopPropagation();
+  if(_ctxPath) addBookmark(_ctxPath,_ctxName);
+  hideCtxMenu();
+});
+document.getElementById('ctx-unbookmark').addEventListener('click',(e)=>{
+  e.stopPropagation();
+  if(_ctxPath) removeBookmark(_ctxPath);
+  hideCtxMenu();
+});
 document.getElementById('ctx-rename').addEventListener('click',(e)=>{
   e.stopPropagation();
   if(_ctxPath) startRename(_ctxPath,_ctxName,_ctxLabel,_ctxRow);
@@ -1154,20 +1279,21 @@ document.getElementById('ctx-delete').addEventListener('click',async(e)=>{
   if(!confirm('"'+_ctxName+'" を削除しますか？'))return;
   try{
     await dbxDelete(path);
-    if(currentPath===path){currentPath=null;fnDisplay.textContent='—';fnDisplay.classList.remove('editable');cmHost.style.display='none';emptyState.classList.remove('hidden');}
+    removeBookmark(path);removeBookmarksUnder(path);
+    if(currentPath===path){currentPath=null;fnDisplay.textContent='—';fnDisplay.classList.remove('editable');cmHost.style.display='none';emptyState.classList.remove('hidden');updateBookmarkBtn();}
     if(row)row.remove();
   }catch(e){alert('エラー: '+e.message);}
 });
 
 // long-press for mobile context menu
 let _longPressTimer=0,_longPressTriggered=false;
-function setupLongPress(el,path,name,labelEl,rowEl){
+function setupLongPress(el,path,name,labelEl,rowEl,opts){
   el.addEventListener('touchstart',(e)=>{
     _longPressTriggered=false;
     _longPressTimer=setTimeout(()=>{
       _longPressTriggered=true;
       const t=e.touches[0];
-      showCtxMenu(t.clientX,t.clientY,path,name,labelEl,rowEl);
+      showCtxMenu(t.clientX,t.clientY,path,name,labelEl,rowEl,opts||{});
     },500);
   },{passive:true});
   el.addEventListener('touchmove',()=>{clearTimeout(_longPressTimer);},{passive:true});
@@ -1210,6 +1336,8 @@ async function doRename(){
     await dbxMove(_renamePath,newPath);
     // update label in tree
     if(_renameLabel) _renameLabel.textContent=newName;
+    // keep bookmark in sync
+    {const bms=loadBookmarks();const bi=bms.findIndex(b=>b.path===_renamePath);if(bi>=0){bms[bi]={path:newPath,name:newName};saveBookmarks(bms);renderBookmarks();updateBookmarkBtn();}}
     // update currentPath if this was the open file
     if(currentPath===_renamePath){
       currentPath=newPath;
@@ -1293,7 +1421,7 @@ async function checkAuth(){
           localStorage.setItem('mdapp_dbx_refresh',dbxRefreshToken);
         }
         localStorage.removeItem('mdapp_dbx_verifier');
-        window.history.replaceState({},'',location.pathname);
+        window.history.replaceState({},'',location.pathname+location.hash);
         await onConnected();
       }
     }catch(e){console.error(e);}
@@ -1313,21 +1441,16 @@ async function onConnected(){
     console.error('loadTree failed',e);
     return;
   }
-  // 最後に開いたファイルを自動で開く
+  // URL ハッシュ指定 > 最後に開いたファイル の優先で自動オープン
+  const hashPath=parseHash();
   const lastPath=localStorage.getItem('mdapp_last_path');
   const lastName=localStorage.getItem('mdapp_last_name');
-  if(lastPath&&lastName){
-    try{
-      const text=await dbxDownload(lastPath);
-      currentPath=lastPath;
-      fnDisplay.textContent=lastName;
-      fnDisplay.classList.add('editable');
-      document.getElementById('filename-status').textContent=lastName;
-      emptyState.classList.add('hidden');
-      cmHost.style.display='';
-      if(!view) buildEditor(text); else setValue(text);
-      setUnsaved(false); updateStatus(); stM.textContent='編集';
-    }catch(e){console.warn('前回ファイルの読み込み失敗',e);}
+  if(hashPath){
+    const treeRow=fileTree.querySelector('.tree-file[data-path="'+CSS.escape(hashPath)+'"]');
+    await openFile(hashPath,hashPath.split('/').pop(),treeRow||null,true);
+  }else if(lastPath&&lastName){
+    const treeRow=fileTree.querySelector('.tree-file[data-path="'+CSS.escape(lastPath)+'"]');
+    await openFile(lastPath,lastName,treeRow||null,true);
   }
 }
 async function startAuth(){
@@ -1430,15 +1553,10 @@ dbxConnectBtn.addEventListener('click',()=>{
     fileTree.innerHTML='<div class="tree-msg">接続してください</div>';
     return;
   }
-  if(!appKey){akInput.value=appKey;dpInput.value=dbxPath;restoreAllFormNav();dbxModal.classList.add('v');return;}
-  startAuth();
-});
-document.getElementById('dbx-modal-cancel').addEventListener('click',()=>dbxModal.classList.remove('v'));
-document.getElementById('dbx-modal-ok').addEventListener('click',()=>{
-  const k=akInput.value.trim(); if(!k)return;
+  const k=document.getElementById('cfg-appkey').value.trim();
+  if(!k){alert('App Key を入力してください');return;}
   appKey=k; localStorage.setItem('mdapp_dbx_key',k);
-  dbxPath=dpInput.value.trim(); localStorage.setItem('mdapp_dbx_path',dbxPath);
-  dbxModal.classList.remove('v');
+  dbxPath=document.getElementById('cfg-path').value.trim(); localStorage.setItem('mdapp_dbx_path',dbxPath);
   startAuth();
 });
 
@@ -1450,6 +1568,11 @@ document.getElementById('settings-btn').addEventListener('click',()=>{
   document.getElementById('cfg-lh').value=cfg.lh;
   document.getElementById('cfg-theme').value=cfg.theme||'dark';
   document.getElementById('cfg-path').value=dbxPath;
+  document.getElementById('cfg-appkey').value=appKey;
+  dbxStatus.textContent=dbxToken?'接続中':'未接続';
+  dbxStatus.classList.toggle('on',!!dbxToken);
+  dbxConnectBtn.textContent=dbxToken?'切断':'Dropbox 接続';
+  dbxConnectBtn.classList.toggle('on',!!dbxToken);
   document.getElementById('cfg-autosave').value=cfg.autosave;
   document.getElementById('cfg-statusbar').value=cfg.statusbar;
   document.getElementById('cfg-sb-keyboard').value=cfg.sbKeyboard;
@@ -1482,6 +1605,8 @@ document.getElementById('settings-ok').addEventListener('click',()=>{
 
 // ── init ──
 applyTheme(cfg.theme!=='light');
+renderBookmarks();
+updateBookmarkBtn();
 
 // iOS keyboard: resize to visual viewport
 // Only update when no touches active to avoid interfering with text selection
