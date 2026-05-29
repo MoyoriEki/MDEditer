@@ -1021,6 +1021,7 @@ function setupBookmarkDrag(row,handle){
     const onMove=(ev)=>{
       const y=ev.clientY;
       if(!dragging){if(Math.abs(y-startY)<4)return;dragging=true;row._dragging=true;row.classList.add('dragging');}
+      ev.preventDefault();
       const others=[...bookmarksEl.querySelectorAll('.bm-row')].filter(r=>r!==row);
       let placed=false;
       for(const other of others){const r=other.getBoundingClientRect();if(y<r.top+r.height/2){bookmarksEl.insertBefore(row,other);placed=true;break;}}
@@ -1028,16 +1029,16 @@ function setupBookmarkDrag(row,handle){
     };
     const onUp=()=>{
       try{handle.releasePointerCapture(e.pointerId);}catch(_){}
-      handle.removeEventListener('pointermove',onMove);
-      handle.removeEventListener('pointerup',onUp);
-      handle.removeEventListener('pointercancel',onUp);
+      document.removeEventListener('pointermove',onMove);
+      document.removeEventListener('pointerup',onUp);
+      document.removeEventListener('pointercancel',onUp);
       row.classList.remove('dragging');
       if(dragging)persistBookmarkOrder();
       setTimeout(()=>{row._dragging=false;},60);
     };
-    handle.addEventListener('pointermove',onMove);
-    handle.addEventListener('pointerup',onUp);
-    handle.addEventListener('pointercancel',onUp);
+    document.addEventListener('pointermove',onMove,{passive:false});
+    document.addEventListener('pointerup',onUp);
+    document.addEventListener('pointercancel',onUp);
   });
 }
 function renderBookmarks(){
@@ -1084,7 +1085,7 @@ bookmarkAddBtn.addEventListener('click',()=>{
 // ── URL hash navigation ──
 function updateHash(path){
   const h='#path='+encodeURIComponent(path);
-  if(location.hash!==h){history.replaceState(null,'',location.pathname+h);}
+  if(location.hash!==h){window.history.replaceState(null,'',location.pathname+h);}
 }
 function parseHash(){
   const m=location.hash.match(/[#&]path=([^&]+)/);
