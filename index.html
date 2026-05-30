@@ -930,7 +930,7 @@ async function loadTree(containerEl, folderPath){
 
 function renderEntries(containerEl, entries, parentPath){
   containerEl.innerHTML='';
-  const folders=entries.filter(e=>e['.tag']==='folder').sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  const folders=entries.filter(e=>e['.tag']==='folder'&&e.name!=='.mdediter').sort((a,b)=>a.name.localeCompare(b.name,'ja'));
   const files=entries.filter(e=>e['.tag']==='file'&&(e.name.endsWith('.md')||e.name.endsWith('.txt'))).sort((a,b)=>a.name.localeCompare(b.name,'ja'));
 
   if(folders.length===0&&files.length===0){
@@ -1000,8 +1000,32 @@ function renderEntries(containerEl, entries, parentPath){
 // ── bookmarks ──
 const bookmarksEl=document.getElementById('bookmarks');
 const bookmarkAddBtn=document.getElementById('bookmark-add-btn');
+const BOOKMARK_REMOTE_PATH='/.mdediter/bookmarks.json';
+let _bmSyncTimer=null;
 function loadBookmarks(){try{return JSON.parse(localStorage.getItem('mdapp_bookmarks')||'[]');}catch(e){return [];}}
-function saveBookmarks(arr){localStorage.setItem('mdapp_bookmarks',JSON.stringify(arr));}
+function saveBookmarks(arr,sync=true){localStorage.setItem('mdapp_bookmarks',JSON.stringify(arr));if(sync)scheduleBookmarkSync();}
+// ── bookmark sync via Dropbox（端末間で共有）──
+function scheduleBookmarkSync(){
+  if(!dbxToken)return;
+  clearTimeout(_bmSyncTimer);
+  _bmSyncTimer=setTimeout(()=>{
+    dbxUpload(BOOKMARK_REMOTE_PATH,JSON.stringify(loadBookmarks())).catch(e=>console.warn('ブックマーク同期に失敗',e));
+  },600);
+}
+async function syncBookmarksFromDropbox(){
+  if(!dbxToken)return;
+  let text;
+  try{ text=await dbxDownload(BOOKMARK_REMOTE_PATH); }
+  catch(e){
+    // リモート未作成: ローカルに項目があれば初回シードする（空なら作らない）
+    if(/not_found/.test(e.message||'')){ if(loadBookmarks().length) scheduleBookmarkSync(); }
+    return;
+  }
+  let remote; try{ remote=JSON.parse(text); }catch(_){ return; }
+  if(!Array.isArray(remote))return;
+  saveBookmarks(remote,false); // リモートを採用（再アップロードはしない）
+  renderBookmarks(); updateBookmarkBtn();
+}
 function isBookmarked(path){return loadBookmarks().some(b=>b.path===path);}
 function addBookmark(path,name){const arr=loadBookmarks();if(arr.some(b=>b.path===path))return;arr.push({path,name});saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
 function removeBookmark(path){const arr=loadBookmarks().filter(b=>b.path!==path);saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
@@ -1442,6 +1466,8 @@ async function onConnected(){
     console.error('loadTree failed',e);
     return;
   }
+  // 端末間で共有しているブックマークを取得
+  try{ await syncBookmarksFromDropbox(); }catch(e){ console.warn('ブックマーク同期に失敗',e); }
   // URL ハッシュ指定 > 最後に開いたファイル の優先で自動オープン
   const hashPath=parseHash();
   const lastPath=localStorage.getItem('mdapp_last_path');
