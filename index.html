@@ -1653,9 +1653,11 @@ if(window.visualViewport){
   window.visualViewport.addEventListener('scroll',()=>{
     if(window.visualViewport.offsetTop>0){
       window.scrollTo(0,0);
-      // After resetting the pan, scroll CM editor to show cursor
+      // After resetting the pan, keep the cursor visible — but only scroll if
+      // it's actually hidden. 'nearest' avoids force-jumping the view when the
+      // cursor (e.g. just tapped into place) is already on screen.
       if(view){
-        view.dispatch({effects:EditorView.scrollIntoView(view.state.selection.main.head,{y:'center'})});
+        view.dispatch({effects:EditorView.scrollIntoView(view.state.selection.main.head,{y:'nearest'})});
       }
     }
   });
@@ -1667,7 +1669,7 @@ if(window.visualViewport){
         if(window.visualViewport.offsetTop>0){
           window.scrollTo(0,0);
           if(view){
-            view.dispatch({effects:EditorView.scrollIntoView(view.state.selection.main.head,{y:'center'})});
+            view.dispatch({effects:EditorView.scrollIntoView(view.state.selection.main.head,{y:'nearest'})});
           }
         }
       }
