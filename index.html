@@ -1646,6 +1646,27 @@ if(window.visualViewport){
       document.body.style.height=window.visualViewport.height+'px';
     }
   });
+  // After undoing iOS's keyboard pan, only scroll the editor if the caret is
+  // ACTUALLY hidden (behind the keyboard, or above the toolbar). Measuring the
+  // caret's real screen rect avoids CM's scrollIntoView force-jumping the view
+  // when the caret is already visible — which 'nearest' still did on empty
+  // lines, where line-height estimates made CM think the caret was off-screen.
+  function keepCaretVisible(){
+    if(!view)return;
+    const head=view.state.selection.main.head;
+    let coords=null;
+    try{coords=view.coordsAtPos(head);}catch(e){}
+    if(!coords)return;
+    const vv=window.visualViewport;
+    const sc=view.scrollDOM.getBoundingClientRect();
+    const top=Math.max(sc.top,0);
+    const bottom=Math.min(sc.bottom,vv.height);
+    if(coords.bottom>bottom){
+      view.dispatch({effects:EditorView.scrollIntoView(head,{y:'end',yMargin:24})});
+    }else if(coords.top<top){
+      view.dispatch({effects:EditorView.scrollIntoView(head,{y:'start',yMargin:24})});
+    }
+  }
   // iOS Safari pans the viewport when keyboard opens near bottom of content.
   // This causes the page to shift and overlap the toolbar/statusbar.
   // visualViewport 'scroll' fires ONLY for this viewport-level pan,
@@ -1653,12 +1674,7 @@ if(window.visualViewport){
   window.visualViewport.addEventListener('scroll',()=>{
     if(window.visualViewport.offsetTop>0){
       window.scrollTo(0,0);
-      // After resetting the pan, keep the cursor visible — but only scroll if
-      // it's actually hidden. 'nearest' avoids force-jumping the view when the
-      // cursor (e.g. just tapped into place) is already on screen.
-      if(view){
-        view.dispatch({effects:EditorView.scrollIntoView(view.state.selection.main.head,{y:'nearest'})});
-      }
+      keepCaretVisible();
     }
   });
   // Also run once after all touches end to catch deferred changes
@@ -1668,9 +1684,7 @@ if(window.visualViewport){
         document.body.style.height=window.visualViewport.height+'px';
         if(window.visualViewport.offsetTop>0){
           window.scrollTo(0,0);
-          if(view){
-            view.dispatch({effects:EditorView.scrollIntoView(view.state.selection.main.head,{y:'nearest'})});
-          }
+          keepCaretVisible();
         }
       }
     },200);
