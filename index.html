@@ -486,6 +486,7 @@ function buildEditor(doc=''){
       liveMarkdown,
       autoReplace,
       autoReplaceUpdate,
+      bracketCursorInside,
       smartBackspaceCleanup,
       EditorView.updateListener.of(u=>{if(u.docChanged){setUnsaved(true);updateStatus();scheduleAutoSave();}}),
     ]}),
@@ -636,6 +637,30 @@ const autoReplaceUpdate=EditorView.updateListener.of(u=>{
   if(!hasInsert)return;
   _arLock=true;
   try{tryAutoReplace();}finally{_arLock=false;}
+});
+
+// ── auto-place cursor inside inserted bracket pairs ──
+// Phones often insert a full pair ("「」"、"（）" etc.) at once via the
+// predictive bar. Native fields drop the caret between the brackets, but
+// CM6 controls selection so the caret lands after the closing bracket.
+// When a single change inserts an empty pair and the caret sits right after
+// it, move the caret between the two brackets to match native behaviour.
+const _bracketPairs={'「':'」','『':'』','（':'）','｛':'｝','［':'］','【':'】','〔':'〕','〈':'〉','《':'》','(':')','[':']','{':'}','"':'"',"'":"'",'“':'”','‘':'’','`':'`'};
+let _bpLock=false;
+const bracketCursorInside=EditorView.updateListener.of(u=>{
+  if(!u.docChanged||_bpLock)return;
+  if(!u.state.selection.main.empty)return;
+  let target=null;
+  u.changes.iterChanges((fA,tA,fB,tB,inserted)=>{
+    const ins=inserted.toString();
+    if(ins.length<2)return;                       // single-char typing → skip
+    const open=ins[ins.length-2],close=ins[ins.length-1];
+    if(_bracketPairs[open]===close) target=tB-1;  // caret target = between pair
+  });
+  if(target==null)return;
+  if(u.state.selection.main.head!==target+1)return; // caret must follow close
+  _bpLock=true;
+  try{u.view.dispatch({selection:{anchor:target}});}finally{_bpLock=false;}
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
