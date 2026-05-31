@@ -487,6 +487,7 @@ function buildEditor(doc=''){
       autoReplace,
       autoReplaceUpdate,
       bracketCursorInside,
+      caretVisibilityKeeper,
       smartBackspaceCleanup,
       EditorView.updateListener.of(u=>{if(u.docChanged){setUnsaved(true);updateStatus();scheduleAutoSave();}}),
     ]}),
@@ -640,27 +641,68 @@ const autoReplaceUpdate=EditorView.updateListener.of(u=>{
 });
 
 // ── auto-place cursor inside inserted bracket pairs ──
-// Phones often insert a full pair ("「」"、"（）" etc.) at once via the
-// predictive bar. Native fields drop the caret between the brackets, but
-// CM6 controls selection so the caret lands after the closing bracket.
-// When a single change inserts an empty pair and the caret sits right after
-// it, move the caret between the two brackets to match native behaviour.
+// Phones insert a full empty pair ("「」"、"（）" etc.) at once via the
+// predictive bar. Native fields drop the caret between the brackets, but CM6
+// controls selection so the caret lands after the closing bracket. Detect a
+// caret sitting right after an empty pair and move it between the two marks.
 const _bracketPairs={'「':'」','『':'』','（':'）','｛':'｝','［':'］','【':'】','〔':'〕','〈':'〉','《':'》','(':')','[':']','{':'}','"':'"',"'":"'",'“':'”','‘':'’','`':'`'};
-let _bpLock=false;
+function tryBracketFix(){
+  if(!view)return;
+  const st=view.state;
+  const sel=st.selection.main;
+  if(!sel.empty)return;
+  const pos=sel.head;
+  if(pos<2)return;
+  const open=st.doc.sliceString(pos-2,pos-1);
+  const close=st.doc.sliceString(pos-1,pos);
+  if(_bracketPairs[open]===close){
+    // selection-only dispatch (no scrollIntoView) → moving the caret here
+    // never triggers a scroll/jump of its own.
+    view.dispatch({selection:{anchor:pos-1}});
+  }
+}
+// Run after IME composition fully settles. A synchronous move *during* the
+// composition-apply update gets reverted by the IME on Android, so we defer
+// like the ・→- auto-replace does (the path proven to work on this device).
+let _bpTimer=0;
+document.addEventListener('compositionend',()=>{clearTimeout(_bpTimer);_bpTimer=setTimeout(tryBracketFix,50);});
+// PC / non-IME insertions: react right after CM applies the change. The
+// selection-only fix dispatched by tryBracketFix has docChanged=false, so it
+// never re-enters this listener.
 const bracketCursorInside=EditorView.updateListener.of(u=>{
-  if(!u.docChanged||_bpLock)return;
-  if(!u.state.selection.main.empty)return;
-  let target=null;
-  u.changes.iterChanges((fA,tA,fB,tB,inserted)=>{
-    const ins=inserted.toString();
-    if(ins.length<2)return;                       // single-char typing → skip
-    const open=ins[ins.length-2],close=ins[ins.length-1];
-    if(_bracketPairs[open]===close) target=tB-1;  // caret target = between pair
-  });
-  if(target==null)return;
-  if(u.state.selection.main.head!==target+1)return; // caret must follow close
-  _bpLock=true;
-  try{u.view.dispatch({selection:{anchor:target}});}finally{_bpLock=false;}
+  if(!u.docChanged)return;
+  let hasInsert=false;
+  u.changes.iterChanges((fA,tA,fB,tB,inserted)=>{if(inserted.length>0)hasInsert=true;});
+  if(hasInsert)tryBracketFix();
+});
+
+// ── keep the caret visible above the on-screen keyboard ──
+// Only scrolls when the caret is genuinely hidden (below the keyboard fold or
+// above the toolbar), so it never force-jumps a caret that's already on screen
+// — including on empty lines, where CM's own scrollIntoView misjudged it.
+function keepCaretVisible(){
+  if(!view||!window.visualViewport)return;
+  const head=view.state.selection.main.head;
+  let coords=null;
+  try{coords=view.coordsAtPos(head);}catch(e){}
+  if(!coords)return;
+  const vv=window.visualViewport;
+  const sc=view.scrollDOM.getBoundingClientRect();
+  const top=Math.max(sc.top,0);
+  const bottom=Math.min(sc.bottom,vv.height);
+  if(coords.bottom>bottom){
+    view.dispatch({effects:EditorView.scrollIntoView(head,{y:'end',yMargin:24})});
+  }else if(coords.top<top){
+    view.dispatch({effects:EditorView.scrollIntoView(head,{y:'start',yMargin:24})});
+  }
+}
+// When the caret moves (e.g. tapped to a new spot behind the keyboard) bring
+// it back into view if needed. Deferred so the keyboard/layout settle first.
+let _kcvTimer=0;
+const caretVisibilityKeeper=EditorView.updateListener.of(u=>{
+  if(!u.selectionSet&&!u.docChanged)return;
+  clearTimeout(_kcvTimer);
+  _kcvTimer=setTimeout(keepCaretVisible,80);
 });
 
 // ── smart backspace: delete "- " / "> " / "# " as a unit ──
@@ -1646,27 +1688,8 @@ if(window.visualViewport){
       document.body.style.height=window.visualViewport.height+'px';
     }
   });
-  // After undoing iOS's keyboard pan, only scroll the editor if the caret is
-  // ACTUALLY hidden (behind the keyboard, or above the toolbar). Measuring the
-  // caret's real screen rect avoids CM's scrollIntoView force-jumping the view
-  // when the caret is already visible — which 'nearest' still did on empty
-  // lines, where line-height estimates made CM think the caret was off-screen.
-  function keepCaretVisible(){
-    if(!view)return;
-    const head=view.state.selection.main.head;
-    let coords=null;
-    try{coords=view.coordsAtPos(head);}catch(e){}
-    if(!coords)return;
-    const vv=window.visualViewport;
-    const sc=view.scrollDOM.getBoundingClientRect();
-    const top=Math.max(sc.top,0);
-    const bottom=Math.min(sc.bottom,vv.height);
-    if(coords.bottom>bottom){
-      view.dispatch({effects:EditorView.scrollIntoView(head,{y:'end',yMargin:24})});
-    }else if(coords.top<top){
-      view.dispatch({effects:EditorView.scrollIntoView(head,{y:'start',yMargin:24})});
-    }
-  }
+  // keepCaretVisible() is defined at module scope (near the editor extensions)
+  // and only scrolls when the caret is genuinely hidden — see its definition.
   // iOS Safari pans the viewport when keyboard opens near bottom of content.
   // This causes the page to shift and overlap the toolbar/statusbar.
   // visualViewport 'scroll' fires ONLY for this viewport-level pan,
