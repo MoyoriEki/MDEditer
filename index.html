@@ -233,7 +233,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
     <div id="file-tree"><div class="tree-msg">接続してください</div></div>
     <div id="sidebar-bottom">
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v3.5</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v3.6</div>
     </div>
   </div>
 
@@ -1068,7 +1068,35 @@ function renderEntries(containerEl, entries, parentPath){
 const bookmarksEl=document.getElementById('bookmarks');
 const bookmarkAddBtn=document.getElementById('bookmark-add-btn');
 function loadBookmarks(){try{return JSON.parse(localStorage.getItem('mdapp_bookmarks')||'[]');}catch(e){return [];}}
-function saveBookmarks(arr){localStorage.setItem('mdapp_bookmarks',JSON.stringify(arr));}
+function saveBookmarks(arr){localStorage.setItem('mdapp_bookmarks',JSON.stringify(arr));scheduleBookmarkUpload();}
+// ── bookmark sync (Dropbox) ──
+// ブックマークは localStorage だけだと端末ごとに分かれてしまうため、
+// Dropbox 上の JSON ファイルにも保存して端末間で共有する。
+function bookmarksDbxPath(){return (dbxPath||'')+'/.mdediter_bookmarks.json';}
+let _bmUploadTimer=0;
+function scheduleBookmarkUpload(){
+  if(!dbxToken)return;
+  clearTimeout(_bmUploadTimer);
+  _bmUploadTimer=setTimeout(saveBookmarksToDropbox,800);
+}
+async function saveBookmarksToDropbox(){
+  if(!dbxToken)return;
+  try{await dbxUpload(bookmarksDbxPath(),JSON.stringify(loadBookmarks()));}
+  catch(e){console.warn('ブックマーク同期失敗',e);}
+}
+async function loadBookmarksFromDropbox(){
+  if(!dbxToken)return;
+  let remote=null;
+  try{const parsed=JSON.parse(await dbxDownload(bookmarksDbxPath()));if(Array.isArray(parsed))remote=parsed;}
+  catch(e){remote=null;} // 未作成(409)やネットワーク不調はローカルを優先
+  if(!remote){saveBookmarksToDropbox();return;} // 初回: ローカル分を初期値としてアップロード
+  // リモートを基準に、ローカルにしか無いものを末尾へ統合（取りこぼし防止）
+  const map=new Map();
+  for(const b of remote)if(b&&b.path)map.set(b.path,{path:b.path,name:b.name});
+  for(const b of loadBookmarks())if(b&&b.path&&!map.has(b.path))map.set(b.path,{path:b.path,name:b.name});
+  saveBookmarks([...map.values()]); // localStorage更新＋（差分があれば）アップロード予約
+  renderBookmarks();updateBookmarkBtn();
+}
 function isBookmarked(path){return loadBookmarks().some(b=>b.path===path);}
 function addBookmark(path,name){const arr=loadBookmarks();if(arr.some(b=>b.path===path))return;arr.push({path,name});saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
 function removeBookmark(path){const arr=loadBookmarks().filter(b=>b.path!==path);saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
@@ -1509,6 +1537,8 @@ async function onConnected(){
     console.error('loadTree failed',e);
     return;
   }
+  // Dropbox に保存されたブックマークを取得して端末間で同期
+  await loadBookmarksFromDropbox();
   // URL ハッシュ指定 > 最後に開いたファイル の優先で自動オープン
   const hashPath=parseHash();
   const lastPath=localStorage.getItem('mdapp_last_path');
