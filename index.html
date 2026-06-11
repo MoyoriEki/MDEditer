@@ -1084,18 +1084,34 @@ async function saveBookmarksToDropbox(){
   try{await dbxUpload(bookmarksDbxPath(),JSON.stringify(loadBookmarks()));}
   catch(e){console.warn('ブックマーク同期失敗',e);}
 }
+let _bmLastFetch=0;
 async function loadBookmarksFromDropbox(){
   if(!dbxToken)return;
+  _bmLastFetch=Date.now();
+  let text;
+  try{text=await dbxDownload(bookmarksDbxPath());}
+  catch(e){
+    // 未作成(path/not_found)のときだけ初回扱いでローカル分をアップロード。
+    // ネットワーク不調等の失敗時に上書きするとリモートのブックマークが消えるため何もしない
+    if(String(e&&e.message).includes('not_found'))saveBookmarksToDropbox();
+    else console.warn('ブックマーク取得失敗',e);
+    return;
+  }
   let remote=null;
-  try{const parsed=JSON.parse(await dbxDownload(bookmarksDbxPath()));if(Array.isArray(parsed))remote=parsed;}
-  catch(e){remote=null;} // 未作成(409)やネットワーク不調はローカルを優先
-  if(!remote){saveBookmarksToDropbox();return;} // 初回: ローカル分を初期値としてアップロード
+  try{const parsed=JSON.parse(text);if(Array.isArray(parsed))remote=parsed;}catch(e){}
+  if(!remote){saveBookmarksToDropbox();return;} // 壊れたファイルはローカル分で修復
   // リモートを基準に、ローカルにしか無いものを末尾へ統合（取りこぼし防止）
   const map=new Map();
   for(const b of remote)if(b&&b.path)map.set(b.path,{path:b.path,name:b.name});
   for(const b of loadBookmarks())if(b&&b.path&&!map.has(b.path))map.set(b.path,{path:b.path,name:b.name});
   saveBookmarks([...map.values()]); // localStorage更新＋（差分があれば）アップロード予約
   renderBookmarks();updateBookmarkBtn();
+}
+// タブを開きっぱなしのPCでも他端末の変更を拾えるよう、復帰時に再取得（連続実行は抑制）
+async function refreshBookmarksFromDropbox(){
+  if(!dbxToken)return;
+  if(Date.now()-_bmLastFetch<10000)return;
+  await loadBookmarksFromDropbox();
 }
 function isBookmarked(path){return loadBookmarks().some(b=>b.path===path);}
 function addBookmark(path,name){const arr=loadBookmarks();if(arr.some(b=>b.path===path))return;arr.push({path,name});saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
@@ -1258,7 +1274,10 @@ async function syncAll(){
   if(unsaved&&currentPath&&view){
     await saveOverwrite();
   }
-  if(dbxToken) await loadTree(fileTree,dbxPath||'');
+  if(dbxToken){
+    await loadTree(fileTree,dbxPath||'');
+    await loadBookmarksFromDropbox();
+  }
   flashBtn(syncBtn);
 }
 
@@ -1593,7 +1612,12 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'&&unsaved&&currentPath&&view){
     doAutoSave();
   }
+  if(document.visibilityState==='visible'){
+    refreshBookmarksFromDropbox();
+  }
 });
+// PCはタブが表示されたままフォーカスだけ戻ることも多いので focus でも再取得
+window.addEventListener('focus',()=>{refreshBookmarksFromDropbox();});
 window.addEventListener('pagehide',()=>{
   if(unsaved&&currentPath&&view&&dbxToken){
     doAutoSave();
