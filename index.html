@@ -392,6 +392,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 import {EditorView,keymap,ViewPlugin,Decoration} from 'https://esm.sh/@codemirror/view@6';
 import {EditorState,Compartment,Prec} from 'https://esm.sh/@codemirror/state@6';
 import {markdown} from 'https://esm.sh/@codemirror/lang-markdown@6';
+import {Strikethrough} from 'https://esm.sh/@lezer/markdown@1';
 import {defaultKeymap,historyKeymap,history,undo,redo} from 'https://esm.sh/@codemirror/commands@6';
 import {syntaxHighlighting,HighlightStyle,syntaxTree,ensureSyntaxTree} from 'https://esm.sh/@codemirror/language@6';
 import {tags} from 'https://esm.sh/@lezer/highlight@1';
@@ -479,7 +480,7 @@ function buildEditor(doc=''){
         {key:'Backspace',run:smartBackspaceCmd},
       ])),
       keymap.of([...defaultKeymap,...historyKeymap,{key:'Mod-s',run(){saveOverwrite();return true;}}]),
-      markdown(),
+      markdown({extensions:[Strikethrough]}),
       hlComp.of(syntaxHighlighting(makeHL(isDark))),
       themeComp.of(makeTheme(isDark)),
       EditorView.lineWrapping,
@@ -557,6 +558,9 @@ const liveMarkdown=ViewPlugin.fromClass(class{
       else if(nm==='EmphasisMark'&&!onCursor){
         decos.push(dimMark.range(nf,nt));
       }
+      else if(nm==='StrikethroughMark'&&!onCursor){
+        decos.push(dimMark.range(nf,nt));
+      }
       else if(nm==='InlineCode'&&!onCursor){
         decos.push(codeBg.range(nf,nt));
       }
@@ -601,11 +605,25 @@ function tryAutoReplace(){
     {find:'＃＃ ', replace:'## ', matchFn:t=>t==='＃＃ '},
     {find:'＃＃＃ ',replace:'### ',matchFn:t=>t==='＃＃＃ '},
     {find:'＞ ',  replace:'> ',  matchFn:t=>t==='＞ '},
+    // horizontal rule: a line of three full-width dashes → ---
+    {find:'ーーー',replace:'---',matchFn:t=>t==='ーーー'},
+    {find:'－－－',replace:'---',matchFn:t=>t==='－－－'},
   ];
   for(const r of rules){
     if(r.matchFn(lt)){
       view.dispatch({changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
         selection:{anchor:line.from+r.replace.length}});
+      return;
+    }
+  }
+  // strikethrough: full-width tilde pairs → ~~ (a lone ～ is left as-is so
+  // normal usage like "1～5" is untouched). Same code-unit length per pair,
+  // so the caret keeps its position.
+  if(lt.includes('～～')||lt.includes('〜〜')){
+    const fixed=lt.replace(/～～/g,'~~').replace(/〜〜/g,'~~');
+    if(fixed!==lt){
+      view.dispatch({changes:{from:line.from,to:line.to,insert:fixed},
+        selection:{anchor:pos}});
       return;
     }
   }
