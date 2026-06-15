@@ -187,7 +187,8 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 .cm-line.cm-md-h3{font-size:1.1em;font-weight:400;color:var(--accent)}
 .cm-line.cm-md-h4{font-size:1.05em;font-weight:400;color:var(--accent)}
 .cm-line.cm-md-bq{border-left:2px solid var(--accent-dim);padding-left:12px;opacity:.85;font-style:italic}
-.cm-md-hr{text-decoration:line-through;opacity:.2}
+.cm-md-hr-line{color:transparent;position:relative}
+.cm-md-hr-line::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px solid var(--border2);pointer-events:none}
 .cm-md-code-bg{background:var(--bg3);border-radius:2px;padding:0 3px}
 
 /* ── TOOLBAR COMPACT (mobile) ── */
@@ -506,7 +507,7 @@ function reconfigureTheme(){
 // ── live markdown decorations ──
 const dimMark=Decoration.mark({class:'cm-md-dim'});
 const codeBg=Decoration.mark({class:'cm-md-code-bg'});
-const hrMark=Decoration.mark({class:'cm-md-hr'});
+const hrLine=Decoration.line({class:'cm-md-hr-line'});
 const headingLine={
   ATXHeading1:Decoration.line({class:'cm-md-h1'}),
   ATXHeading2:Decoration.line({class:'cm-md-h2'}),
@@ -584,7 +585,7 @@ const liveMarkdown=ViewPlugin.fromClass(class{
         decos.push(dimMark.range(nf,nt));
       }
       else if(nm==='HorizontalRule'&&!onCursor){
-        decos.push(hrMark.range(nf,nt));
+        lineDecos.push(hrLine.range(getLine(nf).from));
       }
     }});
     return Decoration.set([...decos,...lineDecos],true);
