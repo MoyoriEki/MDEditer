@@ -594,6 +594,9 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
 // Direct DOM events — bypasses all CM6 composition timing issues
+// Remembers the last replacement {from,insert,t} so an IME echo of the same
+// trigger char (see below) is healed instead of doubled.
+let _arRecent=null;
 function tryAutoReplace(){
   if(!view)return;
   const st=view.state;
@@ -611,11 +614,24 @@ function tryAutoReplace(){
     {find:'－－－',replace:'---',matchFn:t=>t==='－－－'},
   ];
   for(const r of rules){
-    if(r.matchFn(lt)){
-      view.dispatch({changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
-        selection:{anchor:line.from+r.replace.length}});
+    if(!r.matchFn(lt))continue;
+    const from=line.from, to=line.from+r.find.length, now=Date.now();
+    // Android Chrome's IME can re-emit the composed trigger char in a *second*
+    // doc transaction, after we've already converted the first one — re-inserting
+    // e.g. "・" at the line start so "- " becomes "・- ". Converting that again
+    // doubles the marker into "- - " (the recurring "--" bug). Detect that echo
+    // — we just made this exact replacement here and the converted form already
+    // follows the trigger — and strip the stray char instead of expanding it.
+    if(_arRecent&&_arRecent.from===from&&_arRecent.insert===r.replace&&
+       now-_arRecent.t<1000&&lt.slice(r.find.length).startsWith(r.replace)){
+      view.dispatch({changes:{from,to,insert:''},selection:{anchor:from+r.replace.length}});
+      _arRecent={from,insert:r.replace,t:now};
       return;
     }
+    view.dispatch({changes:{from,to,insert:r.replace},selection:{anchor:from+r.replace.length}});
+    _arRecent={from,insert:r.replace,t:now};
+    clearTimeout(_arTimer);
+    return;
   }
   // strikethrough: full-width tilde pairs → ~~ (a lone ～ is left as-is so
   // normal usage like "1～5" is untouched). Same code-unit length per pair,
