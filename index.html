@@ -187,8 +187,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 .cm-line.cm-md-h3{font-size:1.1em;font-weight:400;color:var(--accent)}
 .cm-line.cm-md-h4{font-size:1.05em;font-weight:400;color:var(--accent)}
 .cm-line.cm-md-bq{border-left:2px solid var(--accent-dim);padding-left:12px;opacity:.85;font-style:italic}
-.cm-md-hr-line{color:transparent;position:relative}
-.cm-md-hr-line::before{content:"";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);border-top:1px solid var(--border2);pointer-events:none}
+.cm-md-hr{text-decoration:line-through;opacity:.2}
 .cm-md-code-bg{background:var(--bg3);border-radius:2px;padding:0 3px}
 
 /* ── TOOLBAR COMPACT (mobile) ── */
@@ -393,7 +392,6 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 import {EditorView,keymap,ViewPlugin,Decoration} from 'https://esm.sh/@codemirror/view@6';
 import {EditorState,Compartment,Prec} from 'https://esm.sh/@codemirror/state@6';
 import {markdown} from 'https://esm.sh/@codemirror/lang-markdown@6';
-import {Strikethrough} from 'https://esm.sh/@lezer/markdown@1';
 import {defaultKeymap,historyKeymap,history,undo,redo} from 'https://esm.sh/@codemirror/commands@6';
 import {syntaxHighlighting,HighlightStyle,syntaxTree,ensureSyntaxTree} from 'https://esm.sh/@codemirror/language@6';
 import {tags} from 'https://esm.sh/@lezer/highlight@1';
@@ -481,7 +479,7 @@ function buildEditor(doc=''){
         {key:'Backspace',run:smartBackspaceCmd},
       ])),
       keymap.of([...defaultKeymap,...historyKeymap,{key:'Mod-s',run(){saveOverwrite();return true;}}]),
-      markdown({extensions:[Strikethrough]}),
+      markdown(),
       hlComp.of(syntaxHighlighting(makeHL(isDark))),
       themeComp.of(makeTheme(isDark)),
       EditorView.lineWrapping,
@@ -507,7 +505,7 @@ function reconfigureTheme(){
 // ── live markdown decorations ──
 const dimMark=Decoration.mark({class:'cm-md-dim'});
 const codeBg=Decoration.mark({class:'cm-md-code-bg'});
-const hrLine=Decoration.line({class:'cm-md-hr-line'});
+const hrMark=Decoration.mark({class:'cm-md-hr'});
 const headingLine={
   ATXHeading1:Decoration.line({class:'cm-md-h1'}),
   ATXHeading2:Decoration.line({class:'cm-md-h2'}),
@@ -559,9 +557,6 @@ const liveMarkdown=ViewPlugin.fromClass(class{
       else if(nm==='EmphasisMark'&&!onCursor){
         decos.push(dimMark.range(nf,nt));
       }
-      else if(nm==='StrikethroughMark'&&!onCursor){
-        decos.push(dimMark.range(nf,nt));
-      }
       else if(nm==='InlineCode'&&!onCursor){
         decos.push(codeBg.range(nf,nt));
       }
@@ -584,10 +579,8 @@ const liveMarkdown=ViewPlugin.fromClass(class{
       else if(nm==='URL'&&!onCursor){
         decos.push(dimMark.range(nf,nt));
       }
-      else if(nm==='HorizontalRule'){
-        // always render as a rule — a --- line has no inline text to edit,
-        // so unlike other marks we don't reveal the raw chars on the cursor line
-        lineDecos.push(hrLine.range(getLine(nf).from));
+      else if(nm==='HorizontalRule'&&!onCursor){
+        decos.push(hrMark.range(nf,nt));
       }
     }});
     return Decoration.set([...decos,...lineDecos],true);
@@ -611,9 +604,6 @@ function tryAutoReplace(){
     {find:'＃＃ ', replace:'## ', matchFn:t=>t==='＃＃ '},
     {find:'＃＃＃ ',replace:'### ',matchFn:t=>t==='＃＃＃ '},
     {find:'＞ ',  replace:'> ',  matchFn:t=>t==='＞ '},
-    // horizontal rule: a line of three full-width dashes → ---
-    {find:'ーーー',replace:'---',matchFn:t=>t==='ーーー'},
-    {find:'－－－',replace:'---',matchFn:t=>t==='－－－'},
   ];
   for(const r of rules){
     if(!r.matchFn(lt))continue;
@@ -634,17 +624,6 @@ function tryAutoReplace(){
     _arRecent={from,insert:r.replace,t:now};
     clearTimeout(_arTimer);
     return;
-  }
-  // strikethrough: full-width tilde pairs → ~~ (a lone ～ is left as-is so
-  // normal usage like "1～5" is untouched). Same code-unit length per pair,
-  // so the caret keeps its position.
-  if(lt.includes('～～')||lt.includes('〜〜')){
-    const fixed=lt.replace(/～～/g,'~~').replace(/〜〜/g,'~~');
-    if(fixed!==lt){
-      view.dispatch({changes:{from:line.from,to:line.to,insert:fixed},
-        selection:{anchor:pos}});
-      return;
-    }
   }
 }
 // compositionend only — input event fires during IME intermediate states
