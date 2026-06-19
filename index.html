@@ -588,12 +588,17 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-// Direct DOM events — bypasses all CM6 composition timing issues
-// Remembers the last replacement {from,insert,t} so an IME echo of the same
-// trigger char (see below) is healed instead of doubled.
-let _arRecent=null;
+// Convert full-width markdown triggers, but ONLY once the IME composition has
+// fully committed. On desktop (notably Windows) the browser applies composition
+// synchronously, so the updateListener below can fire mid-composition; if we
+// rewrite the doc then, the IME still commits its composed char on top of our
+// replacement and the marker doubles ("・" → "- ", then the committed "・"
+// re-appears → "- ・" / "- - "). Android applies composition asynchronously,
+// after compositionend, so it was never affected. Bailing on view.composing
+// keeps our edit and the IME from fighting; the conversion then runs from the
+// compositionend setTimeout / the post-composition update instead.
 function tryAutoReplace(){
-  if(!view)return;
+  if(!view||view.composing)return;
   const st=view.state;
   const pos=st.selection.main.head;
   const line=st.doc.lineAt(pos);
@@ -606,24 +611,11 @@ function tryAutoReplace(){
     {find:'＞ ',  replace:'> ',  matchFn:t=>t==='＞ '},
   ];
   for(const r of rules){
-    if(!r.matchFn(lt))continue;
-    const from=line.from, to=line.from+r.find.length, now=Date.now();
-    // Android Chrome's IME can re-emit the composed trigger char in a *second*
-    // doc transaction, after we've already converted the first one — re-inserting
-    // e.g. "・" at the line start so "- " becomes "・- ". Converting that again
-    // doubles the marker into "- - " (the recurring "--" bug). Detect that echo
-    // — we just made this exact replacement here and the converted form already
-    // follows the trigger — and strip the stray char instead of expanding it.
-    if(_arRecent&&_arRecent.from===from&&_arRecent.insert===r.replace&&
-       now-_arRecent.t<1000&&lt.slice(r.find.length).startsWith(r.replace)){
-      view.dispatch({changes:{from,to,insert:''},selection:{anchor:from+r.replace.length}});
-      _arRecent={from,insert:r.replace,t:now};
+    if(r.matchFn(lt)){
+      view.dispatch({changes:{from:line.from,to:line.from+r.find.length,insert:r.replace},
+        selection:{anchor:line.from+r.replace.length}});
       return;
     }
-    view.dispatch({changes:{from,to,insert:r.replace},selection:{anchor:from+r.replace.length}});
-    _arRecent={from,insert:r.replace,t:now};
-    clearTimeout(_arTimer);
-    return;
   }
 }
 // compositionend only — input event fires during IME intermediate states
@@ -646,9 +638,11 @@ const autoReplace=EditorView.domEventHandlers({
 // Browser events (compositionend / beforeinput) can race with CM6's async
 // composition apply on Android Chrome, leaving line.text stale when the
 // setTimeout above fires. updateListener is guaranteed to run post-update.
+// Skip while composing — tryAutoReplace must not edit mid-composition (see
+// above); the post-composition update fires it once composing has cleared.
 let _arLock=false;
 const autoReplaceUpdate=EditorView.updateListener.of(u=>{
-  if(!u.docChanged||_arLock)return;
+  if(!u.docChanged||_arLock||u.view.composing)return;
   let hasInsert=false;
   u.changes.iterChanges((fA,tA,fB,tB,inserted)=>{if(inserted.length>0)hasInsert=true;});
   if(!hasInsert)return;
