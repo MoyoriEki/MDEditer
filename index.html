@@ -148,6 +148,9 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 #preview ul,#preview ol{margin:0 0 1em;padding-left:1.6em}
 #preview li{margin:.3em 0}
 #preview a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-dim)}
+#preview img{max-width:100%;height:auto;border-radius:3px;margin:.3em 0}
+#preview img.img-loading{min-width:80px;min-height:48px;background:var(--bg3);border:1px solid var(--border2)}
+#preview img.img-missing{min-width:80px;min-height:48px;background:var(--bg3);border:1px dashed var(--border2);padding:8px;color:var(--text-dim);font-size:.85em}
 #preview hr{border:none;border-top:1px solid var(--border2);margin:2em 0}
 #preview table{border-collapse:collapse;width:100%;margin:0 0 1em;font-size:.9em;font-family:'IBM Plex Mono',monospace}
 #preview th,#preview td{border:1px solid var(--border2);padding:6px 12px}
@@ -891,6 +894,7 @@ function dbxArg(obj){
 }
 function forceDisconnect(msg){
   dbxToken=null;dbxRefreshToken=null;
+  clearImgLinkCache();
   localStorage.removeItem('mdapp_dbx_token');
   localStorage.removeItem('mdapp_dbx_refresh');
   Object.keys(localStorage).filter(k=>k.startsWith('mdapp_open_time_')).forEach(k=>localStorage.removeItem(k));
@@ -1533,7 +1537,74 @@ async function createNewFolder(name){
 
 // ── preview ──
 marked.setOptions({breaks:true,gfm:true});
-function renderPreview(){previewEl.innerHTML=DOMPurify.sanitize(marked.parse(getValue()));}
+
+// 画像表示: Markdown中の相対パス/Dropboxパス画像を一時リンクに解決して表示する。
+// 外部URL(http(s)/data/blob 等)はそのまま。Dropbox上の画像は <img src> では直接読めないため、
+// files/get_temporary_link で一時的なHTTPS URLに変換する。
+const _imgLinkCache=new Map();            // 解決済みDropboxパス -> {url, ts}
+const IMG_LINK_TTL=3*60*60*1000;          // 一時リンクの再利用上限(Dropbox側の有効期限~4hより短め)
+let _previewSeq=0;                        // 再描画の世代番号(古い非同期解決の反映を防ぐ)
+function clearImgLinkCache(){_imgLinkCache.clear();}
+function resolveDbxImagePath(src,filePath){
+  if(!src) return null;
+  let s=src.trim();
+  // スキーム付き(http:,https:,data:,blob:...)・プロトコル相対・アンカーは外部扱いで触らない
+  if(/^[a-z][a-z0-9+.-]*:/i.test(s)||s.startsWith('//')||s.startsWith('#')) return null;
+  s=s.split('#')[0].split('?')[0];
+  if(!s) return null;
+  let raw; try{raw=decodeURIComponent(s);}catch(e){raw=s;}
+  let full;
+  if(raw.startsWith('/')) full=raw;                       // Dropboxルートからの絶対パス
+  else{                                                   // Markdownファイルのフォルダ基準の相対パス
+    const i=filePath.lastIndexOf('/');
+    full=(i>=0?filePath.slice(0,i):'')+'/'+raw;
+  }
+  const out=[];
+  for(const p of full.split('/')){
+    if(p===''||p==='.') continue;
+    if(p==='..'){out.pop();continue;}
+    out.push(p);
+  }
+  return '/'+out.join('/');
+}
+async function dbxTempLink(path){
+  const c=_imgLinkCache.get(path);
+  if(c&&Date.now()-c.ts<IMG_LINK_TTL) return c.url;
+  const d=await dbxFetch('files/get_temporary_link',{path});
+  _imgLinkCache.set(path,{url:d.link,ts:Date.now()});
+  return d.link;
+}
+async function resolvePreviewImages(token){
+  if(!dbxToken||!currentPath) return;
+  const imgs=[...previewEl.querySelectorAll('img[data-dbx-src]')];
+  for(const img of imgs){
+    const path=resolveDbxImagePath(img.dataset.dbxSrc,currentPath);
+    if(!path){img.classList.remove('img-loading');continue;}
+    try{
+      const url=await dbxTempLink(path);
+      if(token!==_previewSeq) return;                     // より新しい描画に置き換わった
+      img.src=url; img.classList.remove('img-loading');
+    }catch(e){
+      if(token!==_previewSeq) return;
+      img.classList.remove('img-loading'); img.classList.add('img-missing');
+      if(!img.alt) img.alt='画像を読み込めません';
+    }
+  }
+}
+function renderPreview(){
+  const token=++_previewSeq;
+  previewEl.innerHTML=DOMPurify.sanitize(marked.parse(getValue()));
+  // 解決対象の画像は先に同期でsrcを外し、相対パスへの404アクセスのちらつきを防ぐ
+  if(dbxToken&&currentPath){
+    previewEl.querySelectorAll('img').forEach(img=>{
+      const orig=img.getAttribute('src')||'';
+      if(resolveDbxImagePath(orig,currentPath)){
+        img.dataset.dbxSrc=orig; img.removeAttribute('src'); img.classList.add('img-loading');
+      }
+    });
+  }
+  resolvePreviewImages(token);
+}
 modeBtn.addEventListener('click',()=>{
   if(!currentPath)return;
   isPreview=!isPreview;
