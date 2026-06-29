@@ -28,12 +28,14 @@
   --border:#252525;--border2:#333;
   --text:#ccc9c2;--text-dim:#4a4641;--text-mid:#7a7470;
   --accent:#c8a96e;--accent-dim:#5a4a2a;--danger:#c05050;
+  --hl:rgba(220,180,90,.26);
 }
 [data-theme="light"]{
   --bg:#faf8f4;--bg2:#f0ede6;--bg3:#e8e4db;--bg4:#ddd9cf;
   --border:#dedad2;--border2:#c8c3b8;
   --text:#201e1a;--text-dim:#a8a299;--text-mid:#6a6460;
   --accent:#7a5a22;--accent-dim:#c8a050;--danger:#b03030;
+  --hl:rgba(245,212,90,.55);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{background:var(--bg);height:100%;height:100dvh;overflow:hidden}
@@ -152,6 +154,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 #preview img.img-loading{min-width:80px;min-height:48px;background:var(--bg3);border:1px solid var(--border2)}
 #preview img.img-missing{min-width:80px;min-height:48px;background:var(--bg3);border:1px dashed var(--border2);padding:8px;color:var(--text-dim);font-size:.85em}
 #preview hr{border:none;border-top:1px solid var(--border2);margin:2em 0}
+#preview mark{background:var(--hl);color:inherit;border-radius:2px;padding:0 2px}
 #preview table{border-collapse:collapse;width:100%;margin:0 0 1em;font-size:.9em;font-family:'IBM Plex Mono',monospace}
 #preview th,#preview td{border:1px solid var(--border2);padding:6px 12px}
 #preview th{color:var(--accent);background:var(--bg2)}
@@ -193,6 +196,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 .cm-md-hr-line{color:transparent;position:relative}
 .cm-md-hr-line::before{content:"";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);border-top:1px solid var(--border2);pointer-events:none}
 .cm-md-code-bg{background:var(--bg3);border-radius:2px;padding:0 3px}
+.cm-md-hl{background:var(--hl);border-radius:2px}
 
 /* ── TOOLBAR COMPACT (mobile) ── */
 @media(max-width:768px){
@@ -509,6 +513,7 @@ function reconfigureTheme(){
 // ── live markdown decorations ──
 const dimMark=Decoration.mark({class:'cm-md-dim'});
 const codeBg=Decoration.mark({class:'cm-md-code-bg'});
+const hlMark=Decoration.mark({class:'cm-md-hl'});
 const hrLine=Decoration.line({class:'cm-md-hr-line'});
 const headingLine={
   ATXHeading1:Decoration.line({class:'cm-md-h1'}),
@@ -589,6 +594,25 @@ const liveMarkdown=ViewPlugin.fromClass(class{
         lineDecos.push(hrLine.range(getLine(nf).from));
       }
     }});
+    // highlight (==text==): @lezer/markdown has no node for it, so scan the
+    // viewport text directly. The == markers are dimmed off the cursor line —
+    // same reveal-on-edit behavior as bold/italic — while the highlight stays.
+    const hlRe=/==(?=\S)([^=\n]+?)==/g;
+    for(let p=vFrom;p<=vTo;){
+      const l=getLine(p);
+      const onCur=l.number===curLine;
+      hlRe.lastIndex=0;
+      let m;
+      while((m=hlRe.exec(l.text))){
+        const s=l.from+m.index, e=s+m[0].length;
+        decos.push(hlMark.range(s+2,e-2));
+        if(!onCur){
+          decos.push(dimMark.range(s,s+2));
+          decos.push(dimMark.range(e-2,e));
+        }
+      }
+      p=l.to+1;
+    }
     return Decoration.set([...decos,...lineDecos],true);
   }
 },{decorations:v=>v.decorations});
@@ -1540,6 +1564,17 @@ async function createNewFolder(name){
 
 // ── preview ──
 marked.setOptions({breaks:true,gfm:true});
+// highlight: ==text== → <mark> (not part of GFM, so register an inline ext).
+marked.use({extensions:[{
+  name:'highlight',
+  level:'inline',
+  start(src){return src.indexOf('==');},
+  tokenizer(src){
+    const m=/^==(?=\S)([^=\n]+?)==/.exec(src);
+    if(m){return {type:'highlight',raw:m[0],text:m[1],tokens:this.lexer.inlineTokens(m[1])};}
+  },
+  renderer(token){return `<mark>${this.parser.parseInline(token.tokens)}</mark>`;}
+}]});
 
 // 画像表示: Markdown中の相対パス/Dropboxパス画像を一時リンクに解決して表示する。
 // 外部URL(http(s)/data/blob 等)はそのまま。Dropbox上の画像は <img src> では直接読めないため、
