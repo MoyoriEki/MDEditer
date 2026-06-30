@@ -197,6 +197,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 .cm-md-hr-line::before{content:"";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);border-top:1px solid var(--border2);pointer-events:none}
 .cm-md-code-bg{background:var(--bg3);border-radius:2px;padding:0 3px}
 .cm-md-hl{background:var(--hl);border-radius:2px}
+.cm-md-strike{text-decoration:line-through;opacity:.55}
 
 /* ── TOOLBAR COMPACT (mobile) ── */
 @media(max-width:768px){
@@ -514,6 +515,7 @@ function reconfigureTheme(){
 const dimMark=Decoration.mark({class:'cm-md-dim'});
 const codeBg=Decoration.mark({class:'cm-md-code-bg'});
 const hlMark=Decoration.mark({class:'cm-md-hl'});
+const strikeMark=Decoration.mark({class:'cm-md-strike'});
 const hrLine=Decoration.line({class:'cm-md-hr-line'});
 const headingLine={
   ATXHeading1:Decoration.line({class:'cm-md-h1'}),
@@ -594,10 +596,12 @@ const liveMarkdown=ViewPlugin.fromClass(class{
         lineDecos.push(hrLine.range(getLine(nf).from));
       }
     }});
-    // highlight (==text==): @lezer/markdown has no node for it, so scan the
-    // viewport text directly. The == markers are dimmed off the cursor line —
-    // same reveal-on-edit behavior as bold/italic — while the highlight stays.
+    // highlight (==text==) & strikethrough (~~text~~): the base markdown()
+    // parser is CommonMark (no node for either), so scan the viewport text
+    // directly. The markers are dimmed off the cursor line — same reveal-on-edit
+    // behavior as bold/italic — while the styling stays.
     const hlRe=/==(?=\S)([^=\n]+?)==/g;
+    const strikeRe=/~~(?=\S)([^~\n]+?)~~/g;
     for(let p=vFrom;p<=vTo;){
       const l=getLine(p);
       const onCur=l.number===curLine;
@@ -606,6 +610,15 @@ const liveMarkdown=ViewPlugin.fromClass(class{
       while((m=hlRe.exec(l.text))){
         const s=l.from+m.index, e=s+m[0].length;
         decos.push(hlMark.range(s+2,e-2));
+        if(!onCur){
+          decos.push(dimMark.range(s,s+2));
+          decos.push(dimMark.range(e-2,e));
+        }
+      }
+      strikeRe.lastIndex=0;
+      while((m=strikeRe.exec(l.text))){
+        const s=l.from+m.index, e=s+m[0].length;
+        decos.push(strikeMark.range(s+2,e-2));
         if(!onCur){
           decos.push(dimMark.range(s,s+2));
           decos.push(dimMark.range(e-2,e));
