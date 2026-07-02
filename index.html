@@ -1321,7 +1321,9 @@ async function openFile(path,name,row,silent){
     updateBookmarkBtn();
     bookmarksEl.querySelectorAll('.bm-row').forEach(r=>r.classList.toggle('active',r.dataset.path===path));
     if(window.innerWidth<=768){sidebarOpen=false;sidebar.classList.add('collapsed');}
-    if(!isPreview) view.focus();
+    // 自動オープン(起動時の復元やハッシュ遷移)ではフォーカスしない。
+    // スマホでページを開いただけでキーボードが出るのを防ぐため。
+    if(!isPreview && !silent) view.focus();
     if(isPreview) renderPreview();
   }catch(e){if(silent)console.warn('読み込み失敗',e);else alert('読み込みエラー: '+e.message);}
 }
