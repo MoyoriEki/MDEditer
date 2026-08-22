@@ -242,7 +242,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
     <div id="file-tree"><div class="tree-msg">接続してください</div></div>
     <div id="sidebar-bottom">
       <button type="button" id="settings-btn">設定</button>
-      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v3.6</div>
+      <div style="font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-align:right;margin-top:4px">v3.7</div>
     </div>
   </div>
 
@@ -932,6 +932,27 @@ let dbxRefreshToken=localStorage.getItem('mdapp_dbx_refresh')||null;
 function dbxArg(obj){
   return JSON.stringify(obj).replace(/[\u0080-\uFFFF]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
 }
+// Dropbox 上のパスは NFC で保存される。日本語名(濁点・半濁点)が NFD のまま送られると
+// 実体があっても path/not_found になるため、送信前に必ず NFC へ揃える。
+function normPath(p){
+  try{return (p==null?'':String(p)).normalize('NFC');}catch(e){return p==null?'':String(p);}
+}
+// Dropbox の生 JSON エラーは読めないので error_summary を取り出して日本語にする
+function dbxErrSummary(err){
+  const m=String((err&&err.message)||err||'');
+  try{const j=JSON.parse(m);if(j&&j.error_summary)return String(j.error_summary);}catch(e){}
+  return m;
+}
+function isNotFoundErr(err){return dbxErrSummary(err).includes('not_found');}
+function dbxErrMessage(err){
+  const t=dbxErrSummary(err);
+  if(t.includes('path/not_found'))return 'Dropbox 上にファイル/フォルダが見つかりません';
+  if(t.includes('path/restricted_content'))return 'Dropbox の制限により取得できません';
+  if(t.includes('insufficient_space'))return 'Dropbox の空き容量が足りません';
+  if(t.includes('too_many_requests')||t.includes('too_many_write_operations'))return 'Dropbox が混雑しています。少し待って再試行してください';
+  if(t.includes('invalid_access_token')||t.includes('expired_access_token'))return 'セッション切れです。再接続してください';
+  return t;
+}
 function forceDisconnect(msg){
   dbxToken=null;dbxRefreshToken=null;
   clearImgLinkCache();
@@ -1015,7 +1036,17 @@ async function dbxRequest(doReq){
     return r;
   }
 }
+function normalizeBodyPaths(body){
+  if(!body||typeof body!=='object')return body;
+  const out={...body};
+  for(const k of ['path','from_path','to_path'])if(typeof out[k]==='string')out[k]=normPath(out[k]);
+  if(out.options&&typeof out.options==='object'&&typeof out.options.path==='string'){
+    out.options={...out.options,path:normPath(out.options.path)};
+  }
+  return out;
+}
 async function dbxFetch(endpoint,body){
+  body=normalizeBodyPaths(body);
   const doReq=()=>fetch('https://api.dropboxapi.com/2/'+endpoint,{
     method:'POST',
     headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/json'},
@@ -1026,6 +1057,7 @@ async function dbxFetch(endpoint,body){
   return r.json();
 }
 async function dbxDownload(path){
+  path=normPath(path);
   const doReq=()=>fetch('https://content.dropboxapi.com/2/files/download',{
     method:'POST',
     headers:{'Authorization':'Bearer '+dbxToken,'Dropbox-API-Arg':dbxArg({path})},
@@ -1035,6 +1067,7 @@ async function dbxDownload(path){
   return r.text();
 }
 async function dbxUpload(path,content){
+  path=normPath(path);
   const doReq=()=>fetch('https://content.dropboxapi.com/2/files/upload',{
     method:'POST',
     headers:{'Authorization':'Bearer '+dbxToken,'Content-Type':'application/octet-stream','Dropbox-API-Arg':dbxArg({path,mode:'overwrite',autorename:false})},
@@ -1074,9 +1107,60 @@ async function loadTree(containerEl, folderPath){
     const errDiv=document.createElement('div');
     errDiv.className='tree-msg';
     errDiv.style.color='var(--danger)';
-    errDiv.textContent='エラー: '+e.message;
+    // ルートフォルダ自体が見つからない＝設定パスが解決できていない。
+    // ここで諦めるとユーザーに手掛かりが何も残らないので、実際に見えている
+    // ルート直下を出して選び直せるようにする。
+    if(isNotFoundErr(e)&&containerEl===fileTree&&folderPath){
+      errDiv.textContent='設定のフォルダ「'+folderPath+'」が Dropbox 上に見つかりません。';
+      containerEl.appendChild(errDiv);
+      await renderRootPicker(containerEl);
+      return;
+    }
+    errDiv.textContent=isNotFoundErr(e)
+      ? 'フォルダ「'+(folderPath||'/')+'」が見つかりません。'
+      : 'エラー: '+dbxErrMessage(e);
     containerEl.appendChild(errDiv);
   }
+}
+
+// 設定パスが解決できないときに、このトークンで実際に見えているルート直下を提示する。
+// アプリフォルダ権限とフルアクセスでルートの中身が変わるため、ここを見れば
+// 「どこを見に行っているのか」がそのまま分かる。
+async function renderRootPicker(containerEl){
+  const note=document.createElement('div');
+  note.className='tree-msg';
+  note.textContent='ルート直下を確認中...';
+  containerEl.appendChild(note);
+  let entries=[];
+  try{
+    const d=await dbxFetch('files/list_folder',{path:'',recursive:false});
+    entries=d.entries||[];
+  }catch(e){
+    note.style.color='var(--danger)';
+    note.textContent='ルートも読み込めません: '+dbxErrMessage(e);
+    return;
+  }
+  const folders=entries.filter(x=>x['.tag']==='folder').sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  note.textContent=folders.length
+    ? 'このアプリから見えるルート直下です。使うフォルダを選んでください:'
+    : 'このアプリから見えるルート直下は空です。Dropbox アプリの権限設定（アプリフォルダ／フルアクセス）を確認してください。';
+  const pick=(path,label)=>{
+    const row=document.createElement('div');
+    row.className='tree-row tree-folder';
+    const icon=document.createElement('span');icon.className='tree-icon';icon.textContent='▫';
+    const name=document.createElement('span');name.className='tree-name';name.textContent=label;
+    row.append(icon,name);
+    row.addEventListener('click',async()=>{
+      if(!confirm('フォルダパスを\n'+(path||'/')+'\nに変更しますか？'))return;
+      dbxPath=path;
+      localStorage.setItem('mdapp_dbx_path',dbxPath);
+      await loadTree(fileTree,dbxPath||'');
+      await loadBookmarksFromDropbox();
+    });
+    containerEl.appendChild(row);
+  };
+  pick('','/ (ルートをそのまま使う)');
+  for(const f of folders) pick(f.path_display,f.name);
 }
 
 function renderEntries(containerEl, entries, parentPath){
@@ -1177,7 +1261,7 @@ async function loadBookmarksFromDropbox(){
   catch(e){
     // 未作成(path/not_found)のときだけ初回扱いでローカル分をアップロード。
     // ネットワーク不調等の失敗時に上書きするとリモートのブックマークが消えるため何もしない
-    if(String(e&&e.message).includes('not_found'))saveBookmarksToDropbox();
+    if(isNotFoundErr(e))saveBookmarksToDropbox();
     else console.warn('ブックマーク取得失敗',e);
     return;
   }
@@ -1198,6 +1282,17 @@ async function refreshBookmarksFromDropbox(){
   await loadBookmarksFromDropbox();
 }
 function isBookmarked(path){return loadBookmarks().some(b=>b.path===path);}
+// ファイルが移動/リネームされたときに、ブックマークと「最後に開いたファイル」の参照を貼り替える
+function repointPath(oldPath,newPath,newName){
+  const arr=loadBookmarks();
+  let changed=false;
+  for(const b of arr)if(b.path===oldPath){b.path=newPath;b.name=newName||b.name;changed=true;}
+  if(changed){saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
+  if(localStorage.getItem('mdapp_last_path')===oldPath){
+    localStorage.setItem('mdapp_last_path',newPath);
+    localStorage.setItem('mdapp_last_name',newName||newPath.split('/').pop());
+  }
+}
 function addBookmark(path,name){const arr=loadBookmarks();if(arr.some(b=>b.path===path))return;arr.push({path,name});saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
 function removeBookmark(path){const arr=loadBookmarks().filter(b=>b.path!==path);saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
 function removeBookmarksUnder(folderPath){const pre=folderPath+'/';const arr=loadBookmarks().filter(b=>!b.path.startsWith(pre)&&b.path!==folderPath);saveBookmarks(arr);renderBookmarks();updateBookmarkBtn();}
@@ -1295,6 +1390,55 @@ window.addEventListener('hashchange',()=>{
 });
 
 // ── file ops ──
+// 同名ファイルを設定フォルダ配下から探す（Dropbox 側で移動/リネームされた場合の復旧用）
+async function searchByName(name){
+  const run=async(scope)=>dbxFetch('files/search_v2',{
+    query:normPath(name),
+    options:{path:scope,max_results:20,filename_only:true,file_status:'active'},
+  });
+  try{
+    let d;
+    // 設定フォルダが消えている場合はそこを起点に検索できないのでルートへ広げる
+    try{d=await run(dbxPath||'');}
+    catch(inner){if(!isNotFoundErr(inner)||!dbxPath)throw inner;d=await run('');}
+    const seen=new Set();
+    return (d.matches||[])
+      .map(m=>m&&m.metadata&&m.metadata.metadata)
+      .filter(x=>x&&x['.tag']==='file'&&normPath(x.name)===normPath(name))
+      .filter(x=>{const k=normPath(x.path_display);if(seen.has(k))return false;seen.add(k);return true;});
+  }catch(e){console.warn('検索失敗',e);return [];}
+}
+// path/not_found を受けたときの復旧処理。true を返したら呼び出し側は追加のエラー表示をしない
+async function recoverMissingFile(path,name,silent){
+  const base=name||path.split('/').pop();
+  const hits=await searchByName(base);
+  if(hits.length===1&&normPath(hits[0].path_display)!==normPath(path)){
+    const np=hits[0].path_display;
+    repointPath(path,np,hits[0].name);
+    if(!silent)console.info('移動を検出: '+path+' → '+np);
+    await openFile(np,hits[0].name,null,silent);
+    return true;
+  }
+  if(silent){
+    // 起動時の自動オープンが毎回失敗して詰まるのを防ぐため、記憶を捨てる
+    if(localStorage.getItem('mdapp_last_path')===path){
+      localStorage.removeItem('mdapp_last_path');
+      localStorage.removeItem('mdapp_last_name');
+    }
+    return false;
+  }
+  if(hits.length>1){
+    alert('「'+base+'」は移動した可能性があります。候補:\n'+hits.map(h=>h.path_display).join('\n')+'\n\nツリーから開き直してください。');
+    return true;
+  }
+  if(isBookmarked(path)){
+    if(confirm('「'+base+'」が Dropbox 上に見つかりません。\n\n'+path+'\n\nブックマークを削除しますか？')){
+      removeBookmark(path);
+    }
+    return true;
+  }
+  return false;
+}
 let activeRow=null;
 async function openFile(path,name,row,silent){
   if(unsaved&&currentPath){
@@ -1325,7 +1469,11 @@ async function openFile(path,name,row,silent){
     // スマホでページを開いただけでキーボードが出るのを防ぐため。
     if(!isPreview && !silent) view.focus();
     if(isPreview) renderPreview();
-  }catch(e){if(silent)console.warn('読み込み失敗',e);else alert('読み込みエラー: '+e.message);}
+  }catch(e){
+    if(isNotFoundErr(e)&&await recoverMissingFile(path,name,silent))return;
+    if(silent)console.warn('読み込み失敗',e);
+    else alert('読み込みエラー: '+dbxErrMessage(e)+'\n\n'+path);
+  }
 }
 
 async function saveOverwrite(){
