@@ -73,6 +73,7 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 #bookmarks.has-items{display:block}
 .bm-header{padding:8px 14px 4px;font-size:9px;letter-spacing:.15em;color:var(--text-dim);text-transform:uppercase;display:flex;align-items:center;gap:5px}
 .bm-header .material-icon{font-size:12px}
+.bm-warn{margin-left:auto;color:var(--danger);cursor:pointer}
 .bm-row{display:flex;align-items:center;gap:5px;padding:9px 12px 9px 6px;font-size:14px;cursor:pointer;color:var(--text-mid);transition:color .1s,background .1s;white-space:nowrap;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border-left:2px solid transparent}
 .bm-row:hover{color:var(--text);background:var(--bg3)}
 .bm-row.active{color:var(--accent);border-left-color:var(--accent)}
@@ -1155,7 +1156,7 @@ async function renderRootPicker(containerEl){
       dbxPath=path;
       localStorage.setItem('mdapp_dbx_path',dbxPath);
       await loadTree(fileTree,dbxPath||'');
-      await loadBookmarksFromDropbox();
+      await syncBookmarks();
     });
     containerEl.appendChild(row);
   };
@@ -1235,52 +1236,160 @@ function renderEntries(containerEl, entries, parentPath){
 // ── bookmarks ──
 const bookmarksEl=document.getElementById('bookmarks');
 const bookmarkAddBtn=document.getElementById('bookmark-add-btn');
-function loadBookmarks(){try{return JSON.parse(localStorage.getItem('mdapp_bookmarks')||'[]');}catch(e){return [];}}
-function saveBookmarks(arr){localStorage.setItem('mdapp_bookmarks',JSON.stringify(arr));scheduleBookmarkUpload();}
+// ── bookmark store ──
+// 端末間で同期するため、ブックマークは「並び順つきの一覧」ではなく
+// パスごとの更新時刻を持つレコード集合として保持する。
+// 削除は物理削除ではなく墓標(del:true)として残す。そうしないと、
+// 片方の端末で消したブックマークが、もう片方に残っていた分の再アップロードで復活してしまう。
+const BM_KEY='mdapp_bookmarks_v2';
+const BM_LEGACY_KEY='mdapp_bookmarks';
+const BM_FILE='.mdediter_bookmarks.json';
+const BM_TOMBSTONE_TTL=90*24*60*60*1000; // 墓標は90日で掃除
+function bmSanitize(raw){
+  // v2 形式 {v:2,items:[...]} と、旧形式の配列 [{path,name}] の両方を受け付ける
+  let items=null;
+  if(Array.isArray(raw)) items=raw.map((b,i)=>(b&&b.path)?{path:String(b.path),name:String(b.name||String(b.path).split('/').pop()),order:i,at:0,del:false}:null);
+  else if(raw&&Array.isArray(raw.items)) items=raw.items.map((b,i)=>(b&&b.path)?{path:String(b.path),name:String(b.name||String(b.path).split('/').pop()),order:Number.isFinite(b.order)?b.order:i,at:Number.isFinite(b.at)?b.at:0,del:!!b.del}:null);
+  if(!items)return null;
+  return {v:2,items:items.filter(Boolean)};
+}
+function bmParse(text){try{return bmSanitize(JSON.parse(text));}catch(e){return null;}}
+function bmSort(store){
+  store.items.sort((a,b)=>(a.order-b.order)||(a.at-b.at)||(a.path<b.path?-1:a.path>b.path?1:0));
+  return store;
+}
+function bmPrune(store,now){
+  store.items=store.items.filter(it=>!it.del||(now-it.at)<BM_TOMBSTONE_TTL);
+  return store;
+}
+// 端末間の時計ずれで「新しいはずの変更が古い扱い」になるのを防ぐため、
+// 手元の更新時刻は必ず手持ちの最大値より後になるようにする
+function bmNow(store){
+  let max=0;
+  for(const it of store.items)if(it.at>max)max=it.at;
+  return Math.max(Date.now(),max+1);
+}
+function loadBookmarkStore(){
+  const raw=localStorage.getItem(BM_KEY);
+  if(raw){const s=bmParse(raw);if(s)return s;}
+  // 旧バージョンのローカル保存分を引き継ぐ（at:0 なので他端末の変更に負ける＝安全側）
+  const legacy=localStorage.getItem(BM_LEGACY_KEY);
+  if(legacy){const s=bmParse(legacy);if(s)return s;}
+  return {v:2,items:[]};
+}
+function saveBookmarkStore(store){
+  bmSort(store);
+  localStorage.setItem(BM_KEY,JSON.stringify(store));
+  // 旧バージョンのコードが読んでも困らないように、表示用の一覧も従来キーへ残す
+  localStorage.setItem(BM_LEGACY_KEY,JSON.stringify(bmList(store)));
+}
+function bmList(store){return bmSort(store).items.filter(it=>!it.del).map(it=>({path:it.path,name:it.name}));}
+function loadBookmarks(){return bmList(loadBookmarkStore());}
+// 画面上の一覧（追加/削除/並び替え/リネームの結果）をストアへ反映する。
+// 変更のあったレコードだけ更新時刻を進めるので、他端末の無関係な変更を潰さない。
+function saveBookmarks(arr){
+  const store=loadBookmarkStore();
+  const prev=bmList(store).map(b=>b.path);
+  const byPath=new Map(store.items.map(it=>[it.path,it]));
+  const next=[];
+  for(const b of (arr||[]))if(b&&b.path&&!next.some(x=>x.path===b.path))next.push({path:String(b.path),name:String(b.name||String(b.path).split('/').pop())});
+  const now=bmNow(store);
+  let changed=false;
+  next.forEach((b,i)=>{
+    const cur=byPath.get(b.path);
+    if(!cur){store.items.push({path:b.path,name:b.name,order:i,at:now,del:false});changed=true;return;}
+    // 並び順は「他の生存分の中での位置」が変わったときだけ更新時刻を進める
+    const moved=prev.indexOf(b.path)!==i;
+    if(cur.del||cur.name!==b.name||moved){cur.del=false;cur.name=b.name;cur.at=now;changed=true;}
+    if(cur.order!==i){cur.order=i;changed=true;}
+  });
+  const keep=new Set(next.map(b=>b.path));
+  for(const it of store.items)if(!it.del&&!keep.has(it.path)){it.del=true;it.at=now;changed=true;}
+  bmPrune(store,now);
+  saveBookmarkStore(store);
+  if(changed)scheduleBookmarkSync();
+}
 // ── bookmark sync (Dropbox) ──
 // ブックマークは localStorage だけだと端末ごとに分かれてしまうため、
 // Dropbox 上の JSON ファイルにも保存して端末間で共有する。
-function bookmarksDbxPath(){return (dbxPath||'')+'/.mdediter_bookmarks.json';}
-let _bmUploadTimer=0;
-function scheduleBookmarkUpload(){
-  if(!dbxToken)return;
-  clearTimeout(_bmUploadTimer);
-  _bmUploadTimer=setTimeout(saveBookmarksToDropbox,800);
-}
-async function saveBookmarksToDropbox(){
-  if(!dbxToken)return;
-  try{await dbxUpload(bookmarksDbxPath(),JSON.stringify(loadBookmarks()));}
-  catch(e){console.warn('ブックマーク同期失敗',e);}
-}
-let _bmLastFetch=0;
-async function loadBookmarksFromDropbox(){
-  if(!dbxToken)return;
-  _bmLastFetch=Date.now();
-  let text;
-  try{text=await dbxDownload(bookmarksDbxPath());}
-  catch(e){
-    // 未作成(path/not_found)のときだけ初回扱いでローカル分をアップロード。
-    // ネットワーク不調等の失敗時に上書きするとリモートのブックマークが消えるため何もしない
-    if(isNotFoundErr(e))saveBookmarksToDropbox();
-    else console.warn('ブックマーク取得失敗',e);
-    return;
-  }
-  let remote=null;
-  try{const parsed=JSON.parse(text);if(Array.isArray(parsed))remote=parsed;}catch(e){}
-  if(!remote){saveBookmarksToDropbox();return;} // 壊れたファイルはローカル分で修復
-  // リモートを基準に、ローカルにしか無いものを末尾へ統合（取りこぼし防止）
+// 保存先はルート直下に固定する。端末ごとに設定するフォルダパス(dbxPath)の下に置くと、
+// 端末間で設定が違うだけで別ファイルになり、まったく同期されないため。
+function bookmarksDbxPath(){return '/'+BM_FILE;}
+function bmFolder(p){p=String(p||'').trim();if(!p||p==='/')return '';if(!p.startsWith('/'))p='/'+p;return p.replace(/\/+$/,'');}
+function legacyBookmarksDbxPath(){return bmFolder(dbxPath)+'/'+BM_FILE;}
+function bmSame(a,b){return JSON.stringify(bmSort(a).items)===JSON.stringify(bmSort(b).items);}
+function bmMerge(a,b){
+  // パス単位に、更新時刻の新しい方を採用する（同時刻なら残っている方を優先）
   const map=new Map();
-  for(const b of remote)if(b&&b.path)map.set(b.path,{path:b.path,name:b.name});
-  for(const b of loadBookmarks())if(b&&b.path&&!map.has(b.path))map.set(b.path,{path:b.path,name:b.name});
-  saveBookmarks([...map.values()]); // localStorage更新＋（差分があれば）アップロード予約
-  renderBookmarks();updateBookmarkBtn();
+  for(const it of [...a.items,...b.items]){
+    const cur=map.get(it.path);
+    if(!cur||it.at>cur.at||(it.at===cur.at&&cur.del&&!it.del))map.set(it.path,{...it});
+  }
+  return bmSort({v:2,items:[...map.values()]});
+}
+let _bmSyncTimer=0,_bmSyncing=false,_bmDirty=false,_bmRerun=false,_bmLastSync=0,_bmDragging=false;
+let _bmLastError='';
+function scheduleBookmarkSync(delay){
+  _bmDirty=true;
+  if(!dbxToken)return;
+  clearTimeout(_bmSyncTimer);
+  _bmSyncTimer=setTimeout(()=>syncBookmarks(),delay||800);
+}
+// 旧バージョンが dbxPath 配下に書いていた分を、初回だけ拾い上げる
+async function loadLegacyRemoteStore(){
+  const p=legacyBookmarksDbxPath();
+  if(p===bookmarksDbxPath())return null;
+  try{return bmParse(await dbxDownload(p));}catch(e){return null;}
+}
+// 取得 → マージ → 必要なら書き戻し、をまとめて行う。
+// アップロード前に必ず取得してマージするので、他端末の変更を上書きで消さない。
+async function syncBookmarks(){
+  if(!dbxToken)return false;
+  if(_bmDragging){scheduleBookmarkSync(1500);return false;} // 並び替え中は触らない
+  if(_bmSyncing){_bmRerun=true;return false;}
+  _bmSyncing=true;
+  clearTimeout(_bmSyncTimer);
+  const wasDirty=_bmDirty;
+  _bmDirty=false;
+  try{
+    let remote=null,missing=false;
+    try{remote=bmParse(await dbxDownload(bookmarksDbxPath()));}
+    catch(e){
+      // 未作成(path/not_found)のときだけ初回扱い。ネットワーク不調で上書きするとリモートが消えるため
+      if(isNotFoundErr(e))missing=true;else throw e;
+    }
+    if(missing)remote=await loadLegacyRemoteStore();
+    const local=loadBookmarkStore();
+    const merged=remote?bmMerge(local,remote):bmSort(local);
+    bmPrune(merged,Date.now());
+    if(!bmSame(merged,local)){
+      saveBookmarkStore(merged);
+      renderBookmarks();updateBookmarkBtn();
+    }
+    if(!remote||!bmSame(merged,remote))await dbxUpload(bookmarksDbxPath(),JSON.stringify(merged));
+    _bmLastSync=Date.now();
+    if(_bmLastError){_bmLastError='';renderBookmarks();}
+    return true;
+  }catch(e){
+    _bmDirty=wasDirty||_bmDirty; // 失敗した変更は次の機会に再送する
+    const msg=dbxErrMessage(e);
+    console.warn('ブックマーク同期失敗',e);
+    if(_bmLastError!==msg){_bmLastError=msg;renderBookmarks();}
+    return false;
+  }finally{
+    _bmSyncing=false;
+    if(_bmRerun){_bmRerun=false;scheduleBookmarkSync(200);}
+  }
 }
 // タブを開きっぱなしのPCでも他端末の変更を拾えるよう、復帰時に再取得（連続実行は抑制）
 async function refreshBookmarksFromDropbox(){
   if(!dbxToken)return;
-  if(Date.now()-_bmLastFetch<10000)return;
-  await loadBookmarksFromDropbox();
+  if(!_bmDirty&&Date.now()-_bmLastSync<10000)return;
+  await syncBookmarks();
 }
+// オフラインや一時的なエラーで送れなかった変更を取り残さないよう、定期的に再試行する
+window.addEventListener('online',()=>{if(_bmDirty||_bmLastError)syncBookmarks();});
+setInterval(()=>{if(dbxToken&&(_bmDirty||_bmLastError)&&!_bmSyncing)syncBookmarks();},60000);
 function isBookmarked(path){return loadBookmarks().some(b=>b.path===path);}
 // ファイルが移動/リネームされたときに、ブックマークと「最後に開いたファイル」の参照を貼り替える
 function repointPath(oldPath,newPath,newName){
@@ -1310,7 +1419,7 @@ function setupBookmarkDrag(row,handle){
     try{handle.setPointerCapture(e.pointerId);}catch(_){}
     const onMove=(ev)=>{
       const y=ev.clientY;
-      if(!dragging){if(Math.abs(y-startY)<4)return;dragging=true;row._dragging=true;row.classList.add('dragging');}
+      if(!dragging){if(Math.abs(y-startY)<4)return;dragging=true;row._dragging=true;_bmDragging=true;row.classList.add('dragging');}
       ev.preventDefault();
       const others=[...bookmarksEl.querySelectorAll('.bm-row')].filter(r=>r!==row);
       let placed=false;
@@ -1323,6 +1432,7 @@ function setupBookmarkDrag(row,handle){
       document.removeEventListener('pointerup',onUp);
       document.removeEventListener('pointercancel',onUp);
       row.classList.remove('dragging');
+      _bmDragging=false;
       if(dragging)persistBookmarkOrder();
       setTimeout(()=>{row._dragging=false;},60);
     };
@@ -1340,6 +1450,12 @@ function renderBookmarks(){
   const hicon=document.createElement('span');hicon.className='material-icon';hicon.textContent='star';
   const htext=document.createElement('span');htext.textContent='ブックマーク';
   header.append(hicon,htext);
+  if(_bmLastError){
+    const warn=document.createElement('span');warn.className='material-icon bm-warn';warn.textContent='sync_problem';
+    warn.title='同期できていません: '+_bmLastError;
+    warn.onclick=(e)=>{e.stopPropagation();syncBookmarks();};
+    header.appendChild(warn);
+  }
   bookmarksEl.appendChild(header);
   for(const bm of arr){
     const row=document.createElement('div');
@@ -1510,7 +1626,7 @@ async function syncAll(){
   }
   if(dbxToken){
     await loadTree(fileTree,dbxPath||'');
-    await loadBookmarksFromDropbox();
+    await syncBookmarks();
   }
   flashBtn(syncBtn);
 }
@@ -1870,7 +1986,7 @@ async function onConnected(){
     return;
   }
   // Dropbox に保存されたブックマークを取得して端末間で同期
-  await loadBookmarksFromDropbox();
+  await syncBookmarks();
   // URL ハッシュ指定 > 最後に開いたファイル の優先で自動オープン
   const hashPath=parseHash();
   const lastPath=localStorage.getItem('mdapp_last_path');
@@ -1917,7 +2033,8 @@ function resetLocalStateForAccount(accountId){
   const prev=localStorage.getItem('mdapp_dbx_account_id')||'';
   if(accountId)localStorage.setItem('mdapp_dbx_account_id',accountId);
   if(!accountId||!prev||prev===accountId)return;
-  localStorage.removeItem('mdapp_bookmarks');
+  localStorage.removeItem(BM_KEY);
+  localStorage.removeItem(BM_LEGACY_KEY);
   localStorage.removeItem('mdapp_last_path');
   localStorage.removeItem('mdapp_last_name');
   Object.keys(localStorage).filter(k=>k.startsWith('mdapp_open_time_')).forEach(k=>localStorage.removeItem(k));
