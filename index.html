@@ -1107,13 +1107,60 @@ async function loadTree(containerEl, folderPath){
     const errDiv=document.createElement('div');
     errDiv.className='tree-msg';
     errDiv.style.color='var(--danger)';
-    if(isNotFoundErr(e)){
-      errDiv.textContent='フォルダ「'+(folderPath||'/')+'」が Dropbox 上に見つかりません。設定の「Dropboxフォルダパス」を確認してください。';
-    }else{
-      errDiv.textContent='エラー: '+dbxErrMessage(e);
+    // ルートフォルダ自体が見つからない＝設定パスが解決できていない。
+    // ここで諦めるとユーザーに手掛かりが何も残らないので、実際に見えている
+    // ルート直下を出して選び直せるようにする。
+    if(isNotFoundErr(e)&&containerEl===fileTree&&folderPath){
+      errDiv.textContent='設定のフォルダ「'+folderPath+'」が Dropbox 上に見つかりません。';
+      containerEl.appendChild(errDiv);
+      await renderRootPicker(containerEl);
+      return;
     }
+    errDiv.textContent=isNotFoundErr(e)
+      ? 'フォルダ「'+(folderPath||'/')+'」が見つかりません。'
+      : 'エラー: '+dbxErrMessage(e);
     containerEl.appendChild(errDiv);
   }
+}
+
+// 設定パスが解決できないときに、このトークンで実際に見えているルート直下を提示する。
+// アプリフォルダ権限とフルアクセスでルートの中身が変わるため、ここを見れば
+// 「どこを見に行っているのか」がそのまま分かる。
+async function renderRootPicker(containerEl){
+  const note=document.createElement('div');
+  note.className='tree-msg';
+  note.textContent='ルート直下を確認中...';
+  containerEl.appendChild(note);
+  let entries=[];
+  try{
+    const d=await dbxFetch('files/list_folder',{path:'',recursive:false});
+    entries=d.entries||[];
+  }catch(e){
+    note.style.color='var(--danger)';
+    note.textContent='ルートも読み込めません: '+dbxErrMessage(e);
+    return;
+  }
+  const folders=entries.filter(x=>x['.tag']==='folder').sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  note.textContent=folders.length
+    ? 'このアプリから見えるルート直下です。使うフォルダを選んでください:'
+    : 'このアプリから見えるルート直下は空です。Dropbox アプリの権限設定（アプリフォルダ／フルアクセス）を確認してください。';
+  const pick=(path,label)=>{
+    const row=document.createElement('div');
+    row.className='tree-row tree-folder';
+    const icon=document.createElement('span');icon.className='tree-icon';icon.textContent='▫';
+    const name=document.createElement('span');name.className='tree-name';name.textContent=label;
+    row.append(icon,name);
+    row.addEventListener('click',async()=>{
+      if(!confirm('フォルダパスを\n'+(path||'/')+'\nに変更しますか？'))return;
+      dbxPath=path;
+      localStorage.setItem('mdapp_dbx_path',dbxPath);
+      await loadTree(fileTree,dbxPath||'');
+      await loadBookmarksFromDropbox();
+    });
+    containerEl.appendChild(row);
+  };
+  pick('','/ (ルートをそのまま使う)');
+  for(const f of folders) pick(f.path_display,f.name);
 }
 
 function renderEntries(containerEl, entries, parentPath){
@@ -1345,11 +1392,15 @@ window.addEventListener('hashchange',()=>{
 // ── file ops ──
 // 同名ファイルを設定フォルダ配下から探す（Dropbox 側で移動/リネームされた場合の復旧用）
 async function searchByName(name){
+  const run=async(scope)=>dbxFetch('files/search_v2',{
+    query:normPath(name),
+    options:{path:scope,max_results:20,filename_only:true,file_status:'active'},
+  });
   try{
-    const d=await dbxFetch('files/search_v2',{
-      query:normPath(name),
-      options:{path:(dbxPath||''),max_results:20,filename_only:true,file_status:'active'},
-    });
+    let d;
+    // 設定フォルダが消えている場合はそこを起点に検索できないのでルートへ広げる
+    try{d=await run(dbxPath||'');}
+    catch(inner){if(!isNotFoundErr(inner)||!dbxPath)throw inner;d=await run('');}
     const seen=new Set();
     return (d.matches||[])
       .map(m=>m&&m.metadata&&m.metadata.metadata)
