@@ -188,7 +188,11 @@ body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
 /* ── LIVE MARKDOWN ── */
-.cm-md-dim{opacity:.25;font-size:.85em}
+/* Markup that is already doing its job (# , > , **, ==, ~~, `, [](url)) is
+   hidden outright; it comes back the moment the caret lands on that line.
+   font-size:0 rather than display:none — the line box keeps its height even
+   when every character on the line is a marker. */
+.cm-md-hide{font-size:0;letter-spacing:0}
 .cm-line.cm-md-h1{font-size:1.5em;font-weight:300;color:var(--accent)}
 .cm-line.cm-md-h2{font-size:1.25em;font-weight:300;color:var(--accent)}
 .cm-line.cm-md-h3{font-size:1.1em;font-weight:400;color:var(--accent)}
@@ -515,7 +519,7 @@ function reconfigureTheme(){
 }
 
 // ── live markdown decorations ──
-const dimMark=Decoration.mark({class:'cm-md-dim'});
+const hideMark=Decoration.mark({class:'cm-md-hide'});
 const codeBg=Decoration.mark({class:'cm-md-code-bg'});
 const hlMark=Decoration.mark({class:'cm-md-hl'});
 const strikeMark=Decoration.mark({class:'cm-md-strike'});
@@ -565,17 +569,17 @@ const liveMarkdown=ViewPlugin.fromClass(class{
       }
       else if(nm==='HeaderMark'&&!onCursor){
         if(st.sliceDoc(nf,nf+1)==='#'){
-          decos.push(dimMark.range(nf,Math.min(nt+1,line.to)));
+          decos.push(hideMark.range(nf,Math.min(nt+1,line.to)));
         }
       }
       else if(nm==='EmphasisMark'&&!onCursor){
-        decos.push(dimMark.range(nf,nt));
+        decos.push(hideMark.range(nf,nt));
       }
       else if(nm==='InlineCode'&&!onCursor){
         decos.push(codeBg.range(nf,nt));
       }
       else if(nm==='CodeMark'&&!onCursor){
-        decos.push(dimMark.range(nf,nt));
+        decos.push(hideMark.range(nf,nt));
       }
       else if(nm==='Blockquote'){
         for(let pos=nf;pos<=nt;){
@@ -585,13 +589,13 @@ const liveMarkdown=ViewPlugin.fromClass(class{
         }
       }
       else if(nm==='QuoteMark'&&!onCursor){
-        decos.push(dimMark.range(nf,Math.min(nt+1,line.to)));
+        decos.push(hideMark.range(nf,Math.min(nt+1,line.to)));
       }
       else if(nm==='LinkMark'&&!onCursor){
-        decos.push(dimMark.range(nf,nt));
+        decos.push(hideMark.range(nf,nt));
       }
       else if(nm==='URL'&&!onCursor){
-        decos.push(dimMark.range(nf,nt));
+        decos.push(hideMark.range(nf,nt));
       }
       else if(nm==='HorizontalRule'){
         // always render as a rule — a --- line has no inline text to edit,
@@ -601,7 +605,7 @@ const liveMarkdown=ViewPlugin.fromClass(class{
     }});
     // highlight (==text==) & strikethrough (~~text~~): the base markdown()
     // parser is CommonMark (no node for either), so scan the viewport text
-    // directly. The markers are dimmed off the cursor line — same reveal-on-edit
+    // directly. The markers are hidden off the cursor line — same reveal-on-edit
     // behavior as bold/italic — while the styling stays.
     const hlRe=/==(?=\S)([^=\n]+?)==/g;
     const strikeRe=/~~(?=\S)([^~\n]+?)~~/g;
@@ -614,8 +618,8 @@ const liveMarkdown=ViewPlugin.fromClass(class{
         const s=l.from+m.index, e=s+m[0].length;
         decos.push(hlMark.range(s+2,e-2));
         if(!onCur){
-          decos.push(dimMark.range(s,s+2));
-          decos.push(dimMark.range(e-2,e));
+          decos.push(hideMark.range(s,s+2));
+          decos.push(hideMark.range(e-2,e));
         }
       }
       strikeRe.lastIndex=0;
@@ -623,8 +627,8 @@ const liveMarkdown=ViewPlugin.fromClass(class{
         const s=l.from+m.index, e=s+m[0].length;
         decos.push(strikeMark.range(s+2,e-2));
         if(!onCur){
-          decos.push(dimMark.range(s,s+2));
-          decos.push(dimMark.range(e-2,e));
+          decos.push(hideMark.range(s,s+2));
+          decos.push(hideMark.range(e-2,e));
         }
       }
       p=l.to+1;
@@ -634,14 +638,33 @@ const liveMarkdown=ViewPlugin.fromClass(class{
 },{decorations:v=>v.decorations});
 
 // ── auto-replace (・→ - , ＃→#, etc.) ──
-// Direct DOM events — bypasses all CM6 composition timing issues
-// Remembers the last replacement {from,insert,t} so an IME echo of the same
-// trigger char (see below) is healed instead of doubled.
-let _arRecent=null;
+// Direct DOM events — bypasses all CM6 composition timing issues.
+// Two pieces of state keep the conversion from firing on text the user did not
+// just type — the "変換が2回誤爆する" bug on PC:
+//   _arSeed   — the trigger char has to have been typed at the head of *this*
+//               line. Every other keystroke on a line that merely happens to
+//               start with "・", and every undo/redo/paste that puts one back,
+//               leaves the line untouched.
+//   _arRecent — an IME echo of the trigger char is healed, not doubled.
+const _arTriggers='・＃＞';
+let _arRecent=null;   // last replacement {from,insert,t}
+let _arSeed=null;     // trigger char typed at a line head {from,t}
+let _arDefer=0;
+let _arLoading=false; // true while a file is being poured into the editor
 function tryAutoReplace(){
   if(!view)return;
+  // Never rewrite the document while an IME composition is open. The dispatch
+  // cancels the composition, the IME then re-commits its own text, and the
+  // trigger char ends up converted a second time. Retry once it has settled.
+  if(view.composing){
+    if(_arDefer++<30)scheduleAutoReplace(80);
+    return;
+  }
+  _arDefer=0;
   const st=view.state;
-  const pos=st.selection.main.head;
+  const sel=st.selection.main;
+  if(!sel.empty)return;
+  const pos=sel.head;
   const line=st.doc.lineAt(pos);
   const lt=line.text;
   const rules=[
@@ -666,8 +689,13 @@ function tryAutoReplace(){
       _arRecent={from,insert:r.replace,t:now};
       return;
     }
+    // Convert only the trigger the user just typed at this line head. Without
+    // this the rule re-fired on any later keystroke in the same line (and on
+    // the "・" an undo had just brought back), converting it a second time.
+    if(!_arSeed||_arSeed.from!==from||now-_arSeed.t>10000)return;
     view.dispatch({changes:{from,to,insert:r.replace},selection:{anchor:from+r.replace.length}});
     _arRecent={from,insert:r.replace,t:now};
+    _arSeed=null;
     clearTimeout(_arTimer);
     return;
   }
@@ -695,9 +723,26 @@ const autoReplace=EditorView.domEventHandlers({
 let _arLock=false;
 const autoReplaceUpdate=EditorView.updateListener.of(u=>{
   if(!u.docChanged||_arLock)return;
-  let hasInsert=false;
-  u.changes.iterChanges((fA,tA,fB,tB,inserted)=>{if(inserted.length>0)hasInsert=true;});
+  // undo / redo / paste / drop and loading a file never arm a conversion — they
+  // disarm it. A "・" restored by Ctrl+Z, or read from the file the user just
+  // opened, is exactly the character they want to keep.
+  if(_arLoading||u.transactions.some(tr=>tr.isUserEvent('undo')||tr.isUserEvent('redo')||
+     tr.isUserEvent('input.paste')||tr.isUserEvent('input.drop'))){
+    _arSeed=null;
+    return;
+  }
+  let hasInsert=false,seedAt=-1;
+  u.changes.iterChanges((fA,tA,fB,tB,inserted)=>{
+    if(inserted.length===0)return;
+    hasInsert=true;
+    // An insertion that starts with a trigger char and lands on a line head is
+    // the one thing that arms the rules below.
+    const first=inserted.line(1).text.charAt(0);
+    if(first&&_arTriggers.includes(first)&&u.state.doc.lineAt(fB).from===fB)seedAt=fB;
+  });
   if(!hasInsert)return;
+  if(seedAt>=0)_arSeed={from:seedAt,t:Date.now()};
+  _arDefer=0;
   _arLock=true;
   try{tryAutoReplace();}finally{_arLock=false;}
 });
@@ -804,7 +849,10 @@ const smartBackspaceCleanup=EditorView.updateListener.of(u=>{
 function getValue(){return view?view.state.doc.toString():'';}
 function setValue(text){
   if(!view)return;
-  view.dispatch({changes:{from:0,to:view.state.doc.length,insert:text},selection:{anchor:0}});
+  _arLoading=true;
+  try{
+    view.dispatch({changes:{from:0,to:view.state.doc.length,insert:text},selection:{anchor:0}});
+  }finally{_arLoading=false;}
 }
 
 // ── iOS: suppress keyboard navigation bar ──
